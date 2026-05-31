@@ -12,7 +12,7 @@ repository.
    Pydantic models — never raw dicts.
 4. **Type hints everywhere.** Full annotations on all public functions — args
    and return. No bare `Any`.
-5. **≥80% test coverage.** Enforced in CI. New features must include tests.
+5. **≥90% test coverage** on core modules. Enforced in CI. New features must include tests.
 6. **No secrets in repo.** All config via env vars. `.env` is gitignored.
 7. **Ruff + mypy clean before commit.** Run the full quality gate.
 8. **Conventional Commits.** `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`.

@@ -22,7 +22,7 @@ ENV PYTHONPATH=/app \
     PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 
-# Default port reserved for forward compatibility (e.g. when adding a web framework).
+# Container port for the (future) FastAPI app; mapped to host :8300 in compose.
 EXPOSE 8000
 
-CMD ["python", "-m", "src.main"]
+CMD ["python", "-m", "src.quant_marketdata_engine.main"]

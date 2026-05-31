@@ -57,8 +57,8 @@ wrote the change.
 ## 8. Verify in Docker
 
 ```bash
-docker build -t python-template:dev .
-docker run --rm python-template:dev
+docker build -t quant-marketdata-engine:dev .
+docker run --rm quant-marketdata-engine:dev
 ```
 
 Ensure the container starts cleanly and produces the expected output.

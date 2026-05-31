@@ -1,161 +1,127 @@
-# python-template
+# quant-marketdata-engine
 
-> Universal Python project template — uv-native, Docker-ready, AI-agent enabled.
+> The platform's **Market Data Engine** — the single canonical producer of OHLCV and the
+> **sole owner of the TradingView (tvkit) auth cookie**. Gateway-proxied; strategies read,
+> they never fetch.
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-[![Docker Publish](https://github.com/OWNER/REPO/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/docker-publish.yml)
-[![Security Scan](https://github.com/OWNER/REPO/actions/workflows/security.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/security.yml)
+[![CI](https://github.com/lumduan/quant-marketdata-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/lumduan/quant-marketdata-engine/actions/workflows/ci.yml)
+[![Docker Publish](https://github.com/lumduan/quant-marketdata-engine/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/lumduan/quant-marketdata-engine/actions/workflows/docker-publish.yml)
+[![Security Scan](https://github.com/lumduan/quant-marketdata-engine/actions/workflows/security.yml/badge.svg)](https://github.com/lumduan/quant-marketdata-engine/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A fork-ready Python project template with dependency management via [uv](https://docs.astral.sh/uv/),
-Docker support for containerized execution, CI/CD workflows, and a `.claude/`
-directory that AI coding agents use for project context and standards.
+A FastAPI service (Python 3.11, `uv`-managed) that fetches market data **once**,
+idempotently upserts canonical OHLCV into `quant-infra-db` (TimescaleDB), and serves it
+back through `quant-api-gateway`. It is the only component that holds the tvkit cookie, so
+every strategy reads pre-fetched data from one shared store instead of re-pulling it.
 
-## Features
+> ⚠️ **Scaffold only.** This repo currently contains the bootstrap (tooling + planning +
+> agent context). There is **no** fetch / storage / read-API / Redis logic yet — that
+> build-out is sequenced in [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md) (Phase 2+) and
+> is gated on the Phase 0 ADR.
 
-- **uv-native** — single `pyproject.toml` as the source of truth.
-- **Docker** — multi-stage build with `uv`, Python 3.11-slim, ready to deploy.
-- **Type-safe** — `mypy --strict` on all source and test code.
-- **Linted & formatted** — `ruff` with E, F, I, UP, B, SIM rules.
-- **≥80% coverage** — `pytest` + `pytest-asyncio` + `pytest-cov` enforced in CI.
-- **Security scanning** — weekly `bandit` and `pip-audit` runs.
-- **Pre-commit hooks** — ruff-check, ruff-format, mypy on every commit.
-- **AI agent ready** — `.claude/` directory with knowledge, playbooks, and prompt
-  engineering guidance.
+## Why this exists
 
-## Directory structure
+- **One credential owner** — only this service holds `TVKIT_AUTH_TOKEN`; no strategy, no
+  gateway, no host needs it.
+- **Fetch once, read everywhere** — `csm-set` and `tfex` overlap heavily on SET symbols;
+  one ingest serves both, halving premium-account / rate-limit load.
+- **Single source of truth** — one canonical store instead of N per-strategy Parquet
+  copies; no more stale / mixed-date data from skip-existing fetch scripts.
+
+## Architecture position
+
+Part of the **quant-trading-system** umbrella (see [`../CLAUDE.md`](../CLAUDE.md)). It is the
+`Market Data` **EXTERNAL** engine in the gateway's engine catalog — the same pattern as
+`csm-set` behind the Backtest engine.
 
 ```
-.
-├── .claude/                       # AI agent context & playbooks
-│   ├── knowledge/project-skill.md # Master rules for all code
-│   ├── playbooks/                 # Step-by-step workflow guides
-│   └── prompts/                   # Prompt engineering instructions
-├── .github/                       # CI/CD, issue/PR templates
-│   ├── workflows/                 # ci.yml, docker-publish.yml, security.yml
-│   ├── ISSUE_TEMPLATE/
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── FUNDING.yml
-├── src/                           # Application source
-│   └── main.py                    # Entrypoint
-├── tests/                         # Test suite
-├── docs/                          # Documentation
-├── Dockerfile                     # Multi-stage container build
-├── pyproject.toml                 # uv project config + tool settings
-├── uv.lock                        # Locked dependency versions
-├── .pre-commit-config.yaml
-├── .env.example
-├── CHANGELOG.md
-├── CODE_OF_CONDUCT.md
-├── CONTRIBUTING.md
-├── LICENSE
-└── SECURITY.md
+tvkit (premium cookie) + settfex      ← owned ONLY by this service
+            │
+            ▼
+   quant-marketdata-engine (host :8300 / container :8000)  ── writes ──▶ quant-infra-db
+     fetch + idempotent upsert                                          (TimescaleDB
+     own Redis sidecar (hot window + single-flight lock)                 market_data.*)
+            ▲
+            │  GET /api/v2/engines/market-data/*   (PROXY, no cookie)
+   quant-api-gateway
+            │
+            ▼
+   strategies (csm-set, tfex…) + quant-openbb   ── read, never fetch tvkit
 ```
+
+## Ports & `quant-network`
+
+| Item | Value |
+|---|---|
+| Service hostname (in-container) | `quant-marketdata-engine` |
+| Container port | `:8000` |
+| Host port | `:8300` |
+| Health check | `curl http://localhost:8300/health` *(Phase 2)* |
+| Canonical DB | `quant-postgres:5432` (TimescaleDB, `market_data.*`) |
+| Own Redis sidecar | distinct from the gateway's Redis |
+
+All services join the external **`quant-network`** created by `quant-infra-db`. Use service
+hostnames inside containers; host ports are for developer access only.
 
 ## Prerequisites
 
 - Python 3.11 or 3.12
-- [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
-## Installation
-
-```bash
-git clone https://github.com/OWNER/REPO.git
-cd REPO
-
-# Install all dependencies (dev group included by default)
-uv sync --all-groups
-
-# Install pre-commit hooks
-uv run pre-commit install
-```
-
-## Running locally
+## Local setup
 
 ```bash
-uv run python -m src.main
-# Output: hello from python-template
+git clone https://github.com/lumduan/quant-marketdata-engine.git
+cd quant-marketdata-engine
+
+uv sync --all-groups        # install deps (dev group included)
+uv run pre-commit install   # ruff-check / ruff-format / mypy on commit
+
+# Run the scaffold entrypoint
+uv run python -m src.quant_marketdata_engine.main
 ```
 
-## Running with Docker
-
-```bash
-# Build
-docker build -t python-template:dev .
-
-# Run
-docker run --rm python-template:dev
-# Output: hello from python-template
-```
-
-## Testing
-
-```bash
-# Run all tests
-uv run pytest
-
-# With verbosity and coverage
-uv run pytest -v --cov=src --cov-report=term-missing
-```
-
-Coverage must stay ≥80%. The threshold is enforced in CI and in `pyproject.toml`
-(`tool.pytest.ini_options.addopts`).
-
-## Linting, formatting, and type checking
-
-```bash
-uv run ruff check .               # Lint
-uv run ruff format --check .      # Format check (passive)
-uv run ruff format .              # Auto-format (apply)
-uv run mypy src tests             # Type check
-```
-
-Run all quality gates together:
+## Quality gates
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy src tests && uv run pytest
 ```
 
-## Using `.claude/` for AI agent workflows
+`ruff` (E, F, I, UP, B, SIM) · `mypy --strict` · `pytest` with **≥90% coverage on core
+modules** (`--cov-fail-under=90`), enforced in CI. Weekly `bandit` + `pip-audit` security
+scans.
 
-This project is designed to work with AI coding agents like Claude Code.
-The `.claude/` directory provides agents with project context and enforceable
-standards:
+## Environment variables
 
-| File | Purpose |
-|------|---------|
-| `.claude/knowledge/project-skill.md` | **Start here.** Hard rules, soft conventions, and quality gates. Agents load this first. |
-| `.claude/playbooks/feature-development.md` | Repeatable 8-step workflow: read → design → test-first → implement → quality gate → document → commit → verify. |
-| `.claude/prompts/Prompt-Engineer.prompt.md` | How to write effective prompts for AI agents on this project. Includes good and bad examples. |
+Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in real values.
 
-When you open this repo in Claude Code (or any agent that reads `.claude/`),
-the agent will automatically pick up these files. You can also ask it explicitly:
-> *"Read `.claude/knowledge/project-skill.md` and then follow
-> `.claude/playbooks/feature-development.md` to add a new feature."*
+| Variable | Purpose |
+|---|---|
+| `TVKIT_AUTH_TOKEN` | **Sole tvkit credential.** JSON cookie string (NOT a JWT), required key `sessionid`. **Never committed; never logged.** |
+| `MARKETDATA_ENGINE_PUBLIC_MODE` | `true` (default) = read-only, refuses to fetch tvkit; `false` = owner/ingest mode |
+| `MARKETDATA_ENGINE_HOST_PORT` | host port mapping (default `8300`; container is always `:8000`) |
+| `MARKETDATA_ENGINE_PG_DSN` | TimescaleDB DSN (`quant-postgres:5432`, `db_market_data`) |
+| `MARKETDATA_ENGINE_REDIS_URL` | own Redis sidecar (hot-window cache + single-flight lock) |
+| `MARKETDATA_ENGINE_API_KEY` | read-API auth (raw OHLCV is private-side only) |
 
-## Security scanning
+> **Never commit the cookie.** Keep it in the gitignored `.env` / `.tmp/`; inject with
+> `"$(cat file)"`, never `set -a`. See
+> [`.claude/playbooks/development-workflow.md`](.claude/playbooks/development-workflow.md).
 
-```bash
-# Static analysis for common Python security issues
-uv run bandit -r src
+## Documentation
 
-# Check dependencies for known CVEs
-uv run pip-audit
-```
+- **Roadmap (what to build, phase by phase):** [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md)
+- **Agent guide / conventions:** [`CLAUDE.md`](CLAUDE.md)
+- **Domain knowledge:** [`.claude/knowledge/market-data-engine.md`](.claude/knowledge/market-data-engine.md)
+- **Dev playbook:** [`.claude/playbooks/development-workflow.md`](.claude/playbooks/development-workflow.md)
+- **Umbrella feature design:** [`../plans/feature-market-data-engine/`](../plans/feature-market-data-engine/)
+- **Umbrella system map:** [`../CLAUDE.md`](../CLAUDE.md)
 
-Both run automatically on a weekly CI schedule (`.github/workflows/security.yml`).
+## Contributing & security
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution guide,
-conventional commit format, and quality gate expectations. Pull requests are
-welcome — use the PR template to provide context.
-
-## Security
-
-Report vulnerabilities privately to **bad.sonsuk@gmail.com** rather than
-opening a public issue. See [SECURITY.md](SECURITY.md) for the full policy.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for workflow and quality-gate expectations. Report
+vulnerabilities privately to **bad.sonsuk@gmail.com** — see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).

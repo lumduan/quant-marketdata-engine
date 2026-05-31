@@ -8,13 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial template scaffold: `src/`, `tests/`, `docs/`, `.claude/`, `.github/`.
-- `pyproject.toml` with `ruff`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-cov`, `bandit`, `pip-audit`.
-- Multi-stage `Dockerfile` (uv-native, Python 3.11-slim).
-- CI workflow (lint, format check, type check, test with coverage) on Python 3.11 and 3.12.
-- Docker publish workflow targeting GHCR.
-- Weekly security scan workflow (`bandit` + `pip-audit`).
-- AI-agent enablement: `.claude/knowledge/project-skill.md`, `.claude/playbooks/feature-development.md`, `.claude/prompts/Prompt-Engineer.prompt.md`.
-- Issue templates (bug, feature), PR template, `FUNDING.yml`.
+- Bootstrapped `quant-marketdata-engine` from `lumduan/python-template`: renamed
+  package to `src/quant_marketdata_engine/`, personalised `pyproject.toml`, bumped the
+  coverage gate to ≥90%.
+- `docs/plans/ROADMAP.md` — per-service roadmap (Phase 0–5) for the canonical OHLCV
+  store + sole tvkit-cookie owner, derived from the umbrella
+  `plans/feature-market-data-engine/` design docs.
+- `CLAUDE.md` — per-service AI-agent guide (ownership boundaries, ports, conventions).
+- `.claude/knowledge/market-data-engine.md` and
+  `.claude/playbooks/development-workflow.md` — domain context + dev playbook.
+- `.env.example` documenting `TVKIT_AUTH_TOKEN` (cookie JSON, never committed),
+  public/private mode, infra-db DSN, own-Redis URL.
 
-[Unreleased]: https://github.com/OWNER/REPO/compare/HEAD...HEAD
+> **Scaffold only.** No market-data fetch/storage/read-API/Redis logic yet — that
+> build-out is sequenced in `docs/plans/ROADMAP.md` (Phase 2+), gated on the Phase 0 ADR.
+
+[Unreleased]: https://github.com/lumduan/quant-marketdata-engine/compare/HEAD...HEAD
