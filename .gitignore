@@ -38,6 +38,12 @@ coverage.xml
 .env.*
 !.env.example
 
+# tvkit cookie / scratch — NEVER commit a TradingView session cookie
+.tmp/
+
+# Local data store (Parquet snapshots, fetched bars) — DB is the source of truth
+data/
+
 # Editors
 .idea/
 .vscode/

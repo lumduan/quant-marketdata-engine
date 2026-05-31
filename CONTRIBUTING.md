@@ -10,8 +10,8 @@ quality gates for this project.
 
 ```bash
 # Clone and set up
-git clone https://github.com/OWNER/REPO.git
-cd REPO
+git clone https://github.com/lumduan/quant-marketdata-engine.git
+cd quant-marketdata-engine
 uv sync --all-groups
 uv run pre-commit install
 ```

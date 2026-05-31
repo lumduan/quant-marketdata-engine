@@ -1,12 +1,12 @@
 [project]
-name = "python-template"
+name = "quant-marketdata-engine"
 version = "0.1.0"
-description = "Universal Python project template — uv-native, Docker-ready, AI-agent enabled."
+description = "Market Data Engine — canonical OHLCV store + sole tvkit-cookie owner; gateway-proxied (host :8300)."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [{ name = "lumduan", email = "bad.sonsuk@gmail.com" }]
-keywords = ["python", "template", "uv", "docker", "claude-code"]
+keywords = ["quant", "market-data", "ohlcv", "timescaledb", "tvkit", "fastapi", "uv"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -54,7 +54,7 @@ mypy_path = "src"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = ["--cov=src", "--cov-report=term-missing", "--cov-fail-under=80"]
+addopts = ["--cov=src", "--cov-report=term-missing", "--cov-fail-under=90"]
 
 [tool.coverage.run]
 source = ["src"]

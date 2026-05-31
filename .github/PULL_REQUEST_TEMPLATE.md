@@ -15,9 +15,9 @@
 - [ ] `uv run ruff check .` passes
 - [ ] `uv run ruff format --check .` passes
 - [ ] `uv run mypy src tests` passes
-- [ ] `uv run pytest` passes (≥80% coverage)
-- [ ] `docker build -t python-template:dev .` succeeds
-- [ ] Manual smoke test: `docker run --rm python-template:dev` works as expected
+- [ ] `uv run pytest` passes (≥90% coverage)
+- [ ] `docker build -t quant-marketdata-engine:dev .` succeeds
+- [ ] Manual smoke test: `docker run --rm quant-marketdata-engine:dev` works as expected
 
 ## Risk & rollback
 
