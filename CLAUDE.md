@@ -13,10 +13,14 @@ of the TradingView (tvkit) auth cookie**. It is a FastAPI service on container p
 `market_data.*` tables in `quant-infra-db` (TimescaleDB) and ships its **own Redis
 sidecar** (hot-window cache + single-flight fetch lock).
 
-> **Current state: docs-and-scaffold only.** There is **no** fetch, storage, read-API, or
-> Redis code yet. The build-out is sequenced in
-> [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md) (Phase 2+) and is gated on the **Phase 0
-> ADR** (the umbrella `.claude/knowledge/feature-market-data-engine.md`).
+> **Current state: live (Phase 2 complete, 2026-06-01).** The service is a running FastAPI
+> app — read API (`GET /health`, `/ohlcv`, `/ohlcv/adjusted`, `/universe`) + owner-mode
+> `POST /admin/ingest`, an own Redis sidecar (hot-window cache + single-flight lock), the
+> asyncpg layer over `db_market_data`, the tvkit ingest path (CLI + admin endpoint), and the
+> Parquet snapshot exporter. The read path is **hot/warm** (Redis → DB → write-through);
+> cold-path auto-fetch-on-read is deferred (the single-flight primitive is built). See
+> [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md) and the Phase 2 plan
+> [`docs/plans/phase2-service-build-and-gateway-proxy.md`](docs/plans/phase2-service-build-and-gateway-proxy.md).
 
 ### Ownership boundaries (the whole point of this service)
 
@@ -44,7 +48,7 @@ tvkit for TradingView access; Parquet (PyArrow) for the derived backtest snapsho
 | Service hostname (in-container) | `quant-marketdata-engine` |
 | Container port | `:8000` (always — like every other service) |
 | Host port | `:8300` |
-| Health check | `curl http://localhost:8300/health` *(once the FastAPI app lands, Phase 2)* |
+| Health check | `curl http://localhost:8300/health` (live; returns DB + Redis + cookie-presence) |
 | Canonical DB | `quant-postgres:5432` (TimescaleDB, `market_data.*`) |
 | Own Redis sidecar | in this repo's compose (distinct from the gateway's Redis) |
 
@@ -66,7 +70,10 @@ uv run pytest tests/test_main.py -v                   # a single test file
 uv run ruff check .                                   # lint
 uv run ruff format --check .                          # format check (passive)
 uv run mypy src tests                                 # strict type check
-uv run python -m src.quant_marketdata_engine.main     # run the scaffold entrypoint
+uv run uvicorn src.quant_marketdata_engine.api.main:app --port 8000   # run the read API
+# Owner-mode ingest (needs MARKETDATA_ENGINE_PUBLIC_MODE=false + TVKIT_AUTH_TOKEN):
+uv run python -m src.quant_marketdata_engine.ingest fetch --symbol SET:PTT --timeframe 1d --bars 5000
+uv run python -m src.quant_marketdata_engine.ingest backfill --dir ../strategies/csm-set/data/raw/dividends
 ```
 
 Combined quality gate (must pass before every push, matching CI):
