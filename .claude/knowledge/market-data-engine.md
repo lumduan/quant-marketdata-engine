@@ -98,15 +98,22 @@ Canonical table `market_data.ohlcv`, **PK `(symbol, timeframe, ts)`**, store eac
   **Timescale handles this trivially — do not reach for the lake (DuckDB) for S50.**
   Reserve the lake for tick / many-hundred-symbol intraday (D5).
 
-### The `S501!` continuous question (ADR must pin)
+### The `S501!` continuous question — **pinned: option (b)**
 
 `S501!` is TradingView's **front-month continuous** future. "`S501!` 5m" has two meanings
 that differ across a roll: **(a)** TradingView's native non-back-adjusted continuous (price
 gap at each roll) vs **(b)** a system-derived back-adjusted continuous (no gap, matches what
-strategies were validated on). The ADR decides which series the read API serves under
-`S501!`, and whether dated contracts (`S50M2026`) are independently addressable. Store
-**roll dates** so back-adjustment is adjust-on-read (the futures analogue of dividend
-adjustment, D2). `5m` is base grain → stored raw, never CAGG-derived.
+strategies were validated on).
+
+**Decision (Phase 0 ADR — option (b)):** the read API serves the **system-derived
+back-adjusted continuous** as the default under `S501!`, exposed through the adjust-on-read
+contract — `adjusted=true` (default) → roll-adjusted, `adjusted=false` → native (a). The
+strategy was validated on the back-adjusted series (the `09` mirror builds its own
+`ohlcv_continuous`; native `S501!` is only a Parquet cross-check there). **Dated contracts**
+(`S50M2026`, …) are **independently addressable**. Store **roll dates** so back-adjustment
+is adjust-on-read (the futures analogue of dividend adjustment, D2). `5m` is base grain →
+stored raw, never CAGG-derived. Source of truth:
+[`../../../.claude/knowledge/feature-market-data-engine.md`](../../../.claude/knowledge/feature-market-data-engine.md).
 
 Symbol convention:
 
@@ -143,7 +150,14 @@ Idempotent upsert contract: `INSERT … ON CONFLICT (symbol, timeframe, ts) DO U
 - **Reconcile vs retire** the existing tfex mirror
   `09_schema_db_tfex_s50_multi_tf_swing_ohlcv.sql` (`ohlcv_raw` per-contract `S50H2026`/… +
   its own back-adjusted `ohlcv_continuous`, currently Parquet-sourced). Phase 1 *inverts*
-  it to DB-canonical. Seed-vs-retire is the Phase-0 open question (blocks Phase 1).
+  it to DB-canonical. **Pinned (Phase 0 ADR): RETIRE — build the shared `market_data` schema
+  fresh, then migrate.** `09`'s shape (per-contract column + separate continuous table, no
+  `1d`, in the strategy's DB) is incompatible with the unified `(symbol,timeframe,ts)` +
+  adjust-on-read target; seeding would lock in the wrong shape. Phase 4 ports `09`'s roll
+  logic (volume-crossover, `roll_offset_days=5`, `adjustment_factor`) into adjust-on-read +
+  roll dates, backfills the data into `market_data.*`, demotes tfex `db_writer.py` to a
+  reader, then drops `ohlcv_raw`/`ohlcv_continuous`. Source of truth:
+  [`../../../.claude/knowledge/feature-market-data-engine.md`](../../../.claude/knowledge/feature-market-data-engine.md).
 - Data stays on **local SSD**; NAS migration deferred (D9 — Mongo unsupported on NFS;
   Postgres fragile; NAS = backups/WAL archive only, or an iSCSI zvol if live data must move).
 

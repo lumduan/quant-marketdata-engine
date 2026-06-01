@@ -207,22 +207,24 @@ not CAGG-derived. *(Detail:
 
 ### 0.3 ADR (the gate) — *umbrella `.claude/knowledge/`*
 
-- [ ] Author `.claude/knowledge/feature-market-data-engine.md` in the **umbrella** repo
+- [x] Author `.claude/knowledge/feature-market-data-engine.md` in the **umbrella** repo
   (architecture rationale + schema + trade-offs)
-- [ ] Confirm Decision Log **D1–D10**
-- [ ] Set the **intraday lake-first threshold** as a number (S50 stays in Timescale)
-- [ ] Define the **Market Data read contract** (request/response shape; daily + adjusted;
+- [x] Confirm Decision Log **D1–D10** (all ACCEPTED; no new D-decision)
+- [x] Set the **intraday lake-first threshold** as a number — **~50M rows/yr** (S50 ≈ 152k
+  rows/yr stays in Timescale)
+- [x] Define the **Market Data read contract** (request/response shape; daily + adjusted;
   the `S501!` continuous question above)
-- [ ] Decide **seed-vs-retire** for the existing tfex `09` TimescaleDB mirror (see Phase 4)
+- [x] Decide **seed-vs-retire** for the existing tfex `09` TimescaleDB mirror — **RETIRE**
+  (build fresh + migrate; see Phase 4)
 
-### 0.4 Umbrella registration — *deferred until the ADR merges*
+### 0.4 Umbrella registration — *done (ADR merged)*
 
-- [ ] Add `quant-marketdata-engine` to the umbrella `CLAUDE.md` **repo/remote table**
-- [ ] Add to the **Docker network contract** (`quant-marketdata-engine`, container `:8000`,
+- [x] Add `quant-marketdata-engine` to the umbrella `CLAUDE.md` **repo/remote table**
+- [x] Add to the **Docker network contract** (`quant-marketdata-engine`, container `:8000`,
   host `:8300`)
-- [ ] Add to the **local bring-up order** (after infra-db, before/with the gateway)
-- [ ] Add the **health check** (`curl http://localhost:8300/health`)
-- [ ] Flip the `feature-market-data-engine` registry status as appropriate
+- [x] Add to the **local bring-up order** (after infra-db, before/with the gateway)
+- [x] Add the **health check** (`curl http://localhost:8300/health`)
+- [x] Flip the `feature-market-data-engine` registry status as appropriate
 
 > **Out of scope (Phase 0):** any fetch / storage / read-API / Redis code; any SQL; the
 > gateway proxy route. Until the ADR merges, umbrella registration tables stay as a
@@ -472,9 +474,12 @@ These are enforced as phase exit criteria where relevant:
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 0 — ADR + Repo Bootstrap. Scaffold + agent context shipped on
-  `feat/bootstrap-marketdata-engine`. **Blocked on:** the Phase 0 ADR
-  (`.claude/knowledge/feature-market-data-engine.md` in the umbrella) — until it merges,
-  umbrella registration (§0.4) and all code phases stay gated.
-- **Completed:** §0.1 (repo + tooling), §0.2 (roadmap + agent context).
-- **No application code exists yet** — Phase 2 is the first code phase.
+- **Active phase:** Phase 1 — `quant-infra-db` shared `market_data` schema (lands in the
+  `quant-infra-db` repo's own PR). **Phase 0 is complete** — the ADR is authored
+  (`.claude/knowledge/feature-market-data-engine.md` in the umbrella) and the service is
+  registered in the umbrella `CLAUDE.md`, so Phase 1 is now unblocked.
+- **Completed:** §0.1 (repo + tooling), §0.2 (roadmap + agent context), §0.3 (ADR — D1–D10
+  accepted, intraday threshold ~50M rows/yr, read contract, `S501!` = option (b)
+  back-adjusted, `09` = retire), §0.4 (umbrella registration). Phase plan:
+  [`phase0-adr-repo-bootstrap.md`](phase0-adr-repo-bootstrap.md).
+- **No application code exists yet** — Phase 2 is the first code phase in this repo.
