@@ -15,6 +15,7 @@ from fastapi import Depends, Header, HTTPException, status
 
 from src.quant_marketdata_engine.cache.redis_client import get_redis
 from src.quant_marketdata_engine.config.settings import Settings, get_settings
+from src.quant_marketdata_engine.db.errors import PoolNotInitializedError
 from src.quant_marketdata_engine.db.postgres import get_pool
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,18 @@ def get_settings_dep() -> Settings:
 
 
 def get_pool_dep() -> asyncpg.Pool:
-    """Return the initialized asyncpg pool."""
-    return get_pool()
+    """Return the initialized asyncpg pool, or 503 if the DB is unavailable.
+
+    The pool is uninitialized when startup could not reach Postgres; surface a
+    clean ``503`` rather than letting the dependency error become a bare ``500``.
+    """
+    try:
+        return get_pool()
+    except PoolNotInitializedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database unavailable",
+        ) from exc
 
 
 def get_redis_dep() -> aioredis.Redis | None:

@@ -141,6 +141,19 @@ def test_auth_passes_with_correct_key() -> None:
     assert resp.status_code == 200
 
 
+# ---- DB unavailable -----------------------------------------------------
+
+
+def test_get_pool_dep_maps_uninitialized_to_503() -> None:
+    import pytest as _pytest
+    from fastapi import HTTPException
+
+    # conftest resets the module pool to None before each test.
+    with _pytest.raises(HTTPException) as exc:
+        deps.get_pool_dep()
+    assert exc.value.status_code == 503
+
+
 # ---- /universe ----------------------------------------------------------
 
 
