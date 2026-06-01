@@ -1,0 +1,50 @@
+services:
+  marketdata-engine:
+    build: .
+    container_name: quant-marketdata-engine
+    restart: always
+    ports:
+      # Host-side port overridable via MARKETDATA_ENGINE_HOST_PORT (defaults 8300).
+      - "${MARKETDATA_ENGINE_HOST_PORT:-8300}:8000"
+    environment:
+      # Public-safe defaults: read-only, NO tvkit cookie. Owner/ingest mode is the
+      # docker-compose.private.yml overlay (which flips PUBLIC_MODE + supplies .env).
+      MARKETDATA_ENGINE_PUBLIC_MODE: "true"
+      MARKETDATA_ENGINE_PG_DSN: "postgresql://quant:quant@quant-postgres:5432/db_market_data"
+      MARKETDATA_ENGINE_REDIS_URL: "redis://marketdata-redis:6379/0"
+      MARKETDATA_ENGINE_LOG_LEVEL: "INFO"
+    depends_on:
+      marketdata-redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # The engine's OWN Redis sidecar (ADR D8) — distinct from the gateway's
+  # quant-redis. Internal-only (no host port) to avoid clashing with :6379.
+  marketdata-redis:
+    image: redis:7-alpine
+    container_name: quant-marketdata-redis
+    restart: always
+    volumes:
+      - marketdata_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  marketdata_redis_data:
+
+networks:
+  default:
+    name: quant-network
+    external: true
