@@ -139,14 +139,36 @@ Idempotent upsert contract: `INSERT … ON CONFLICT (symbol, timeframe, ts) DO U
 
 ---
 
-## infra-db schema touchpoints (Phase 1, lands in `quant-infra-db`)
+## Realized schema (Phase 1 — COMPLETE, in `quant-infra-db`)
 
-- New `10_schema_market_data.sql` (hypertable + companion tables) and
-  `11_market_data_caggs.sql` (derived-TF continuous aggregates + refresh policies, following
-  the existing `06_continuous_aggregates.sql` `WITH NO DATA` + `if_not_exists` pattern).
-- `src/db/` Pydantic row models (`OHLCVBarRow`, `CorporateActionRow`,
-  `UniverseMembershipRow`) with `Decimal` prices + UTC validators; asyncpg upsert helpers.
-- Destination DB (`db_market_data` vs `db_gateway.market_data` schema) is a Phase-0 call.
+> Phase 1 shipped in `quant-infra-db` (`feat/market-data-schema-phase1`). This is the exact
+> contract Phase 2 ingest/read code writes/reads. Connect via `Settings.market_data_dsn`.
+
+- **Database:** **`db_market_data`** (dedicated DB, not a `db_gateway` schema — decided in
+  Phase 1 per D4/D7); schema **`market_data`**. DSN host inside containers: `quant-postgres:5432`.
+- **`market_data.ohlcv`** (hypertable on `ts`, 30-day chunks): columns
+  `symbol text`, `timeframe text` (CHECK ∈ `1d|1h|5m`), `ts timestamptz` (bar-open UTC),
+  `open/high/low/close numeric(18,6)` (CHECK >0; `high>=low`), `volume numeric(20,4)` (CHECK ≥0,
+  default 0), `open_interest numeric(20,4)` (NULL for equities; CHECK NULL or ≥0),
+  `source text` (default `'tvkit'`), `ingested_at timestamptz` (default now()).
+  **PK `(symbol, timeframe, ts)`** → upsert `ON CONFLICT (symbol, timeframe, ts) DO UPDATE`.
+  Read index `(symbol, timeframe, ts DESC)`. Compression `segmentby (symbol, timeframe)` after 7d.
+  **Prices are `numeric(18,6)`** (not the 08/09 mirror's `(18,4)`) — shared multi-asset store.
+- **`market_data.corporate_actions`** — PK `(symbol, ex_date, action_type)`;
+  `action_type ∈ split|dividend|roll`; `ratio numeric(18,8)` (>0, the **price back-adjustment
+  multiplier** the engine computes); `amount numeric(18,6)` (raw magnitude, audit); `note text`.
+- **`market_data.universe_membership`** — PK `(as_of, symbol, index_name)`; `index_name` default
+  `'SET'`. As-of dated; the engine seeds it in Phase 2.
+- **`market_data.ohlcv_adjusted`** (VIEW) — `price * exp(sum(ln(ratio)))` over actions dated
+  strictly after each bar; exposes `adjustment_factor`. Recomputes on read (reflects new actions
+  immediately). Equity split/dividend path is live; exact futures-roll parity ports in Phase 4.
+- **`cagg_ohlcv_1h` / `cagg_ohlcv_4h`** — continuous aggregates off the `timeframe='5m'` base
+  (`first/max/min/last/sum`), `WITH NO DATA` + refresh policies. Fetched `1d` stays authoritative.
+- **`src/db/` (in `quant-infra-db`):** `OHLCVBarRow`, `CorporateActionRow`,
+  `UniverseMembershipRow` (Pydantic v2, `Decimal`, UTC validators) + `upsert_ohlcv`,
+  `fetch_ohlcv`, `upsert_corporate_actions`, `upsert_universe_membership`; `Settings.market_data_dsn`.
+
+## infra-db schema touchpoints (the Phase-1 reconciliation context)
 - **Reconcile vs retire** the existing tfex mirror
   `09_schema_db_tfex_s50_multi_tf_swing_ohlcv.sql` (`ohlcv_raw` per-contract `S50H2026`/… +
   its own back-adjusted `ohlcv_continuous`, currently Parquet-sourced). Phase 1 *inverts*

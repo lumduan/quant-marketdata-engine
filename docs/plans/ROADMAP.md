@@ -243,36 +243,40 @@ code**.
 > [`../../../plans/feature-market-data-engine/quant-infra-db-changes.md`](../../../plans/feature-market-data-engine/quant-infra-db-changes.md)
 > and [`../../../plans/feature-market-data-engine/multi-timeframe-storage.md`](../../../plans/feature-market-data-engine/multi-timeframe-storage.md).
 
-- [ ] **`10_schema_market_data.sql`** — `market_data.ohlcv` hypertable, **PK
+- [x] **`10_schema_market_data.sql`** — `market_data.ohlcv` hypertable, **PK
   `(symbol, timeframe, ts)`** (Option A, D10):
   - `open/high/low/close numeric(18,6)` (never `float`), `volume numeric(20,4)`,
     **`open_interest numeric(20,4)` (futures; from day one, NULL for equities)**,
     `source text`, `ingested_at timestamptz`
   - `ts` = **bar-open time, stored UTC** (display Asia/Bangkok)
-  - partition by time; compression `compress_segmentby = 'symbol, timeframe'`;
-    per-timeframe retention (compress 5m after ~7d; keep 1d forever)
+  - 30-day chunks; compression `compress_segmentby = 'symbol, timeframe'` after 7d;
+    keep 1d forever (no drop policy). CHECK constraints: timeframe∈{1d,1h,5m}, prices>0,
+    volume≥0, OI≥0, high≥low
   - **Futures `1d` close = settlement, never rolled up from intraday** (D10)
-- [ ] **`11_market_data_caggs.sql`** — continuous aggregates for coarser TFs a strategy
-  didn't fetch (e.g. `ohlcv_15m/1h/4h` off a 5m base) + `add_continuous_aggregate_policy`
-  refresh jobs, following the existing `06_continuous_aggregates.sql` `WITH NO DATA` +
-  `if_not_exists` pattern
-- [ ] `market_data.corporate_actions` — `(symbol, ex_date, type, ratio/amount)` **plus the
-  futures roll dates** for `S501!` back-adjustment (adjust-on-read, D2/D10)
-- [ ] `market_data.adjusted_view` (or CAGG) — split/div/roll adjust on read
-- [ ] `market_data.universe_membership` — as-of dated SET constituents (seed from the
-  monthly universe snapshots)
-- [ ] *(optional)* `market_data.contract_specs` — per-contract tick size, multiplier,
-  expiry, roll dates (future, not Phase-1-required)
-- [ ] Idempotent upsert contract `ON CONFLICT (symbol, timeframe, ts) DO UPDATE`
-- [ ] `src/db/` Pydantic row models (`OHLCVBarRow`, `CorporateActionRow`,
+- [x] **`11_market_data_caggs.sql`** — `cagg_ohlcv_1h` / `cagg_ohlcv_4h` continuous
+  aggregates off the 5m base + `add_continuous_aggregate_policy` refresh jobs, following the
+  `06_continuous_aggregates.sql` `WITH NO DATA` + `if_not_exists` pattern
+- [x] `market_data.corporate_actions` — `(symbol, ex_date, action_type, ratio, amount)`,
+  PK `(symbol, ex_date, action_type)`; holds equity splits/dividends **and** futures roll
+  dates (`action_type='roll'`) for `S501!` back-adjustment (adjust-on-read, D2/D10)
+- [x] `market_data.ohlcv_adjusted` — adjust-on-read **view** (recomputes on action insert)
+- [x] `market_data.universe_membership` — as-of dated constituents, PK
+  `(as_of, symbol, index_name)` (schema only; seeding is Phase 2)
+- [-] *(optional, deferred)* `market_data.contract_specs` — per-contract tick size, multiplier,
+  expiry, roll dates (future, not Phase-1-required per ADR)
+- [x] Idempotent upsert contract `ON CONFLICT (symbol, timeframe, ts) DO UPDATE`
+- [x] `src/db/` Pydantic row models (`OHLCVBarRow`, `CorporateActionRow`,
   `UniverseMembershipRow`) with `Decimal` prices + UTC validators; asyncpg upsert helpers
-- [ ] Decide destination: `db_market_data` (own DB) vs `db_gateway.market_data` schema
-  (Phase 0 call)
-- [ ] Data stays on **local SSD** — NAS migration deferred (D9)
+  (`upsert_ohlcv`/`fetch_ohlcv`/`upsert_corporate_actions`/`upsert_universe_membership`)
+- [x] Destination decided: **new `db_market_data` database** (own DB, not a `db_gateway`
+  schema) — keeps the store independently owned per D4/D7
+- [x] Data stays on **local SSD** — NAS migration deferred (D9; unchanged)
 
 **Exit criteria:** schema applies on `quant-network`; upsert is idempotent; the adjusted
 view recomputes when a `corporate_actions` row is added; ≥80% coverage per the
-`quant-infra-db` repo gate.
+`quant-infra-db` repo gate. ✅ **MET** — lands in `quant-infra-db`'s PR
+(`feat/market-data-schema-phase1`); unit 96 passed @ 98.4%, infra 19/19. Plan:
+[`phase1-quant-infra-db-market-data-schema.md`](phase1-quant-infra-db-market-data-schema.md).
 
 > **Out of scope:** any code in this repo; the read API; the lake.
 
@@ -474,12 +478,14 @@ These are enforced as phase exit criteria where relevant:
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 1 — `quant-infra-db` shared `market_data` schema (lands in the
-  `quant-infra-db` repo's own PR). **Phase 0 is complete** — the ADR is authored
-  (`.claude/knowledge/feature-market-data-engine.md` in the umbrella) and the service is
-  registered in the umbrella `CLAUDE.md`, so Phase 1 is now unblocked.
-- **Completed:** §0.1 (repo + tooling), §0.2 (roadmap + agent context), §0.3 (ADR — D1–D10
-  accepted, intraday threshold ~50M rows/yr, read contract, `S501!` = option (b)
-  back-adjusted, `09` = retire), §0.4 (umbrella registration). Phase plan:
-  [`phase0-adr-repo-bootstrap.md`](phase0-adr-repo-bootstrap.md).
-- **No application code exists yet** — Phase 2 is the first code phase in this repo.
+- **Active phase:** Phase 2 — this service (build) + gateway proxy route. **Phase 1 is
+  complete** — the shared `market_data` schema landed in `quant-infra-db`
+  (`feat/market-data-schema-phase1`): new **`db_market_data`** database, `market_data.ohlcv`
+  hypertable (PK `(symbol, timeframe, ts)`, `numeric(18,6)` prices), `corporate_actions`,
+  `universe_membership`, the `ohlcv_adjusted` adjust-on-read view, and `cagg_ohlcv_1h`/`4h`.
+  This service is the eventual sole writer of those tables (Phase 2).
+- **Completed:** Phase 0 (§0.1–§0.4); **Phase 1** (schema + `src/db` models/repos + tests in
+  `quant-infra-db`; unit 96 passed @ 98.4%, infra 19/19; gate green). Phase plans:
+  [`phase0-adr-repo-bootstrap.md`](phase0-adr-repo-bootstrap.md),
+  [`phase1-quant-infra-db-market-data-schema.md`](phase1-quant-infra-db-market-data-schema.md).
+- **No application code exists in this repo yet** — Phase 2 is the first code phase here.
