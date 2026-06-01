@@ -49,8 +49,11 @@ tvkit for TradingView access; Parquet (PyArrow) for the derived backtest snapsho
 | Own Redis sidecar | in this repo's compose (distinct from the gateway's Redis) |
 
 Use **service hostnames inside containers**, not `localhost`. Host ports exist only for
-developer access. This service is registered in the umbrella `CLAUDE.md` repo table /
-network contract / bring-up order **once the Phase 0 ADR merges** (see ROADMAP §0.4).
+developer access. This service is **registered in the umbrella `CLAUDE.md`** (repo/remote
+table, Docker network contract, engine catalog, bring-up order, health checks, per-service
+quick reference) as of the Phase 0 ADR (2026-06-01). The ADR is the source of truth for the
+architecture decisions: [`../.claude/knowledge/feature-market-data-engine.md`](../.claude/knowledge/feature-market-data-engine.md)
+(see ROADMAP §0.3/§0.4).
 
 ## Commands
 
