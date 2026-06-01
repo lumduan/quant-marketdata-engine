@@ -22,7 +22,7 @@ ENV PYTHONPATH=/app \
     PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 
-# Container port for the (future) FastAPI app; mapped to host :8300 in compose.
+# Container port for the FastAPI app; mapped to host :8300 in compose.
 EXPOSE 8000
 
-CMD ["python", "-m", "src.quant_marketdata_engine.main"]
+CMD ["uvicorn", "src.quant_marketdata_engine.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

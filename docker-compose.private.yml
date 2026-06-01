@@ -1,0 +1,17 @@
+# Owner / ingest-mode overlay. Layer on top of the base compose:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.private.yml up -d
+#
+# Flips the engine into owner mode (ingest enabled) and supplies the tvkit cookie
+# from a gitignored .env. NEVER commit .env. One-off ingest run:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.private.yml run --rm \
+#     marketdata-engine python -m src.quant_marketdata_engine.ingest fetch \
+#     --symbol SET:PTT --timeframe 1d --bars 5000
+services:
+  marketdata-engine:
+    # .env supplies TVKIT_AUTH_TOKEN (JSON cookie) + MARKETDATA_ENGINE_API_KEY.
+    env_file: .env
+    environment:
+      # Owner mode: ingest endpoints + CLI are enabled.
+      MARKETDATA_ENGINE_PUBLIC_MODE: "false"

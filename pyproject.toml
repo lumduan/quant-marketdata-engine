@@ -14,7 +14,17 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = []
+dependencies = [
+    "asyncpg>=0.29",
+    "fastapi>=0.115",
+    "httpx>=0.27",
+    "pyarrow>=16",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "redis>=5",
+    "tvkit>=0.11.1",
+    "uvicorn[standard]>=0.30",
+]
 
 [dependency-groups]
 dev = [
@@ -49,6 +59,13 @@ python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 mypy_path = "src"
+
+# Tests pass in-memory fakes where the prod code is typed against asyncpg.Pool
+# (asyncpg is untyped → those ``# type: ignore[arg-type]`` markers are harmless
+# but report as unused). Relax only that one check for the test tree.
+[[tool.mypy.overrides]]
+module = "tests.*"
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

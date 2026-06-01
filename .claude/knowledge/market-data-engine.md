@@ -5,9 +5,13 @@ Distilled from the umbrella design docs under
 (`ROADMAP.md`, `request-flow.md`, `multi-timeframe-storage.md`,
 `quant-infra-db-changes.md`). Read this before touching ingest, storage, or the read API.
 
-> **Status:** the feature is **Proposed / not started**, gated on the Phase 0 ADR. This
-> repo is currently a scaffold; the modules described below do not exist yet — they are the
-> Phase 2+ build target.
+> **Status:** **Phase 2 complete (2026-06-01)** — the modules below are built and live:
+> `config/`, `db/` (asyncpg + models + repos over `db_market_data`), `cache/` (own Redis:
+> write-through hot-window + single-flight lock), `ingest/` (tvkit client + service + CLI +
+> backfill), `api/` (read API + owner-mode `/admin/ingest`), `snapshot/` (DB → Parquet). The
+> read path is **hot/warm** (Redis → DB → write-through); cold-path auto-fetch-on-read is
+> deferred (single-flight primitive built, ingest is a separate path). The gateway proxies
+> `/api/v2/engines/market-data/*` here. Phase 3 (csm-set reader behind a flag) is next.
 
 ---
 

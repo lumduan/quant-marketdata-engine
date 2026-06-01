@@ -290,58 +290,67 @@ view recomputes when a `corporate_actions` row is added; ≥80% coverage per the
 
 ### 2.1 Ingest side (sole tvkit-cookie owner)
 
-- [ ] `src/quant_marketdata_engine/ingest/tvkit_client.py` — wraps tvkit; the **only**
+- [x] `src/quant_marketdata_engine/ingest/tvkit_client.py` — wraps tvkit; the **only**
   holder of `TVKIT_AUTH_TOKEN` (cookie JSON; see
   [`.claude/knowledge/market-data-engine.md`](../../.claude/knowledge/market-data-engine.md)
-  and the umbrella `reference-tvkit-tradingview-auth` memory). Fetch via the documented
-  `--bars`/`bars_count` path; **async** (`httpx.AsyncClient`, never `requests`).
-- [ ] `src/quant_marketdata_engine/ingest/upsert.py` — idempotent upsert of raw bars +
-  corporate actions / roll dates into `market_data.*` (`ON CONFLICT … DO UPDATE`)
-- [ ] **Single-flight fetch lock** in the own Redis sidecar (D8) — dedupe on
-  `(symbol, timeframe, range)` so two strategies don't both trigger a fetch
-- [ ] One-time **backfill** seeded from the fresh 2026-05-29 fetch already on disk in
-  `csm-set/data/raw/dividends/` (import, don't re-pull 700 symbols)
-- [ ] Robust error handling: upstream tvkit failures, rate limits, partial/incomplete
-  bars, session-expiry (`ProfileFetchError` → surfaced, not swallowed)
+  and the umbrella `reference-tvkit-tradingview-auth` memory). Fetches via tvkit
+  `get_historical_ohlcv` (`bars_count`/`start`/`end`, `Adjustment.SPLITS`); **async**.
+- [x] `src/quant_marketdata_engine/ingest/service.py` + `db/repositories.py` — idempotent
+  upsert of raw bars into `market_data.*` (`ON CONFLICT (symbol,timeframe,ts) DO UPDATE`)
+- [x] **Single-flight fetch lock** in the own Redis sidecar (D8) — dedupe on
+  `(symbol, timeframe, range)` so two callers don't both trigger a fetch
+- [x] One-time **backfill** (`ingest/backfill.py`) seeded from the on-disk fetch in
+  `csm-set/data/raw/dividends/` — best-effort, idempotent, no-ops when the (gitignored)
+  source is absent; tagged `source='csm-backfill-div'` (dividend-adjusted; parity is a
+  Phase-5 concern)
+- [x] Robust error handling: upstream tvkit failures / session-expiry surfaced as typed
+  `TvkitFetchError` (never the cookie); public-mode refuses ingest (`IngestDisabledError`)
 
 ### 2.2 Read side (private/auth-gated)
 
-- [ ] `src/quant_marketdata_engine/api/` — FastAPI app on container `:8000`; routes:
-  `GET /health`; `GET /ohlcv` (raw); `GET /ohlcv/adjusted`; `GET /universe`
-- [ ] Resolve `(symbol, timeframe, range)` via the hot/warm/cold flow above (Redis →
-  TimescaleDB → ingest); write-through to Redis
-- [ ] Uniform read contract so strategies bind to a contract, never a table name; the
-  engine decides "stored row vs continuous aggregate"
-- [ ] **Auth-gate** the read API (raw OHLCV is private-side only)
-- [ ] Input validation on symbol / timeframe enum (`1d|1h|5m|…`) / range
+- [x] `src/quant_marketdata_engine/api/` — FastAPI app on container `:8000`; routes:
+  `GET /health`; `GET /ohlcv` (raw); `GET /ohlcv/adjusted`; `GET /universe`; owner-mode
+  `POST /admin/ingest`
+- [x] Resolve `(symbol, timeframe, range)` via **hot/warm** (Redis → TimescaleDB →
+  write-through). *Cold path (auto-fetch-on-miss) is **deferred** — the single-flight lock
+  primitive is built and ingest is a separate path (CLI + `/admin/ingest`).*
+- [x] Uniform read contract (ADR §5) so strategies bind to a contract, never a table name
+- [x] **Auth-gate** the read API (`X-API-Key`, constant-time; raw OHLCV is private-side)
+- [x] Input validation on symbol / timeframe enum (`1d|1h|5m`) / range (rejects malformed)
 
 ### 2.3 Parquet snapshot exporter
 
-- [ ] `src/quant_marketdata_engine/snapshot/exporter.py` — DB → columnar Parquet for
-  heavy backtest scans (offline path); round-trips with the DB
+- [x] `src/quant_marketdata_engine/snapshot/exporter.py` — DB → columnar Parquet
+  (decimal128-exact) for offline backtest scans; round-trips with the DB
 
 ### 2.4 Service plumbing
 
-- [ ] `docker-compose.yml` — service + **own Redis sidecar**, joins external
-  `quant-network`, host `:8300`, public-safe defaults
-- [ ] `docker-compose.private.yml` — owner/ingest mode (`env_file` with the cookie)
-- [ ] `pydantic-settings` `Settings` reading `MARKETDATA_ENGINE_*` + `TVKIT_AUTH_TOKEN`;
+- [x] `docker-compose.yml` — service + **own Redis sidecar** (`marketdata-redis`), joins
+  external `quant-network`, host `:8300`, public-safe defaults (no cookie, read-only)
+- [x] `docker-compose.private.yml` — owner/ingest mode (`env_file` with the cookie;
+  `public_mode=false`)
+- [x] `pydantic-settings` `Settings` reading `MARKETDATA_ENGINE_*` + `TVKIT_AUTH_TOKEN`;
   structured logging (`logging.getLogger(__name__)`); module-local `errors.py`
 
 ### 2.5 Gateway proxy — *`quant-api-gateway`'s own PR*
 
-- [ ] Add thin **proxy route** `GET /api/v2/engines/market-data/*` → `:8300`
-- [ ] Flip the engine catalog entry **`EXTERNAL stub → active`**
-- [ ] Gateway holds **no** tvkit cookie; keeps its own Redis for v1/v2 response caching
+- [x] Add thin **proxy route** `GET /api/v2/engines/market-data/*` → `:8000` (in-network
+  service name) — `/health`, `/ohlcv`, `/ohlcv/adjusted`, `/universe`; forwards `X-API-Key`;
+  upstream-down → clean `502/503/504`
+- [x] Engine catalog entry reports **`active`** (description updated to the standalone
+  engine; `engine_registry` + static fallback were already `active`)
+- [x] Gateway holds **no** tvkit cookie; keeps its own Redis for v1/v2 response caching
   (separate from this service's sidecar)
 
-**Exit criteria:** service stands up on `quant-network`; engine status flips
-EXTERNAL→active; one ingest run populates the DB; the gateway proxy returns adjusted + raw;
-the snapshot export round-trips; **≥90% coverage on core modules** (ingest/api/snapshot),
-mypy strict clean, structured logging + comprehensive error handling in place; bulk-history
-fetch performance characterised (single-flight, batch upsert, no N+1 fetches).
+**Exit criteria:** ✅ **MET** — service stands up on `quant-network`; engine status reports
+active; ingest (CLI / `/admin/ingest`) populates the DB idempotently; the gateway proxy
+returns adjusted + raw; the snapshot export round-trips; **coverage 98.9%** on core modules,
+mypy strict clean, structured logging + typed error handling in place; single-flight + batch
+upsert (no N+1). Plan: [`phase2-service-build-and-gateway-proxy.md`](phase2-service-build-and-gateway-proxy.md).
 
-> **Out of scope:** strategy cutover (Phase 3/4); the intraday lake.
+> **Out of scope (deferred):** cold-path auto-fetch-on-read (lock primitive built); the
+> in-process scheduler (Phase 5); futures-roll back-adjustment math + `09` retirement
+> (Phase 4); strategy cutover (Phase 3/4); the intraday lake (D5).
 
 ---
 
@@ -478,14 +487,17 @@ These are enforced as phase exit criteria where relevant:
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 2 — this service (build) + gateway proxy route. **Phase 1 is
-  complete** — the shared `market_data` schema landed in `quant-infra-db`
-  (`feat/market-data-schema-phase1`): new **`db_market_data`** database, `market_data.ohlcv`
-  hypertable (PK `(symbol, timeframe, ts)`, `numeric(18,6)` prices), `corporate_actions`,
-  `universe_membership`, the `ohlcv_adjusted` adjust-on-read view, and `cagg_ohlcv_1h`/`4h`.
-  This service is the eventual sole writer of those tables (Phase 2).
-- **Completed:** Phase 0 (§0.1–§0.4); **Phase 1** (schema + `src/db` models/repos + tests in
-  `quant-infra-db`; unit 96 passed @ 98.4%, infra 19/19; gate green). Phase plans:
+- **Active phase:** Phase 3 — `strategies/csm-set` reads behind a flag. **Phase 2 is
+  complete** (2026-06-01): this service is now a live FastAPI app (read API + owner-mode
+  ingest) over the `db_market_data` schema, with its own Redis sidecar + compose, and the
+  gateway proxies `/api/v2/engines/market-data/*` to it. Read path = hot/warm (Redis → DB →
+  write-through); cold-path auto-fetch-on-read is deferred (single-flight primitive built).
+- **Completed:** Phase 0 (§0.1–§0.4); **Phase 1** (schema + `src/db` in `quant-infra-db`;
+  unit 96 @ 98.4%, infra 19/19); **Phase 2** (this repo: ingest/api/cache/db/snapshot +
+  compose, 95 tests @ 98.9%; gateway proxy + catalog, 336 tests @ 90.6%). Phase plans:
   [`phase0-adr-repo-bootstrap.md`](phase0-adr-repo-bootstrap.md),
-  [`phase1-quant-infra-db-market-data-schema.md`](phase1-quant-infra-db-market-data-schema.md).
-- **No application code exists in this repo yet** — Phase 2 is the first code phase here.
+  [`phase1-quant-infra-db-market-data-schema.md`](phase1-quant-infra-db-market-data-schema.md),
+  [`phase2-service-build-and-gateway-proxy.md`](phase2-service-build-and-gateway-proxy.md).
+- Branches: `feat/phase2-service-build` (this repo), `feat/market-data-engine-proxy`
+  (gateway), `docs/market-data-phase2` (umbrella). Merge/bring-up order: infra-db (merged) →
+  this engine → gateway → umbrella docs.
