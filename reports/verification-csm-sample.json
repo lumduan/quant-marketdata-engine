@@ -1,0 +1,88 @@
+{
+  "verification": "csm_parity",
+  "timestamp": "2026-06-02T03:45:01.131392+00:00",
+  "start_time": "2026-06-02T03:44:57.817161+00:00",
+  "engine_base_url": "http://localhost:8300",
+  "tolerances": {
+    "price": 0.01,
+    "volume": 1.0
+  },
+  "summary": {
+    "total_symbols": 5,
+    "matched_exactly": 0,
+    "matched_with_tolerance": 5,
+    "mismatched": 0,
+    "missing_data": 0,
+    "errors": 0,
+    "skipped": 1,
+    "overall_parity": true
+  },
+  "symbols": {
+    "SET:ADVANC": {
+      "status": "tolerance_match",
+      "expected_bars": 5040,
+      "actual_bars": 5000,
+      "max_price_diff": 0.0,
+      "max_volume_diff": 0.0,
+      "mismatch_count": 0,
+      "missing_in_expected": 0,
+      "missing_in_actual": 40,
+      "mismatches": [],
+      "note": "rows differ in count but all overlapping rows match exactly"
+    },
+    "SET:AOT": {
+      "status": "tolerance_match",
+      "expected_bars": 5040,
+      "actual_bars": 5000,
+      "max_price_diff": 1.0000000028043132e-07,
+      "max_volume_diff": 0.0,
+      "mismatch_count": 0,
+      "missing_in_expected": 0,
+      "missing_in_actual": 40,
+      "mismatches": [],
+      "note": null
+    },
+    "SET:KBANK": {
+      "status": "tolerance_match",
+      "expected_bars": 5040,
+      "actual_bars": 5000,
+      "max_price_diff": 0.0,
+      "max_volume_diff": 0.0,
+      "mismatch_count": 0,
+      "missing_in_expected": 0,
+      "missing_in_actual": 40,
+      "mismatches": [],
+      "note": "rows differ in count but all overlapping rows match exactly"
+    },
+    "SET:PTT": {
+      "status": "tolerance_match",
+      "expected_bars": 5040,
+      "actual_bars": 5000,
+      "max_price_diff": 0.0,
+      "max_volume_diff": 0.0,
+      "mismatch_count": 0,
+      "missing_in_expected": 0,
+      "missing_in_actual": 40,
+      "mismatches": [],
+      "note": "rows differ in count but all overlapping rows match exactly"
+    },
+    "SET:SCB": {
+      "status": "tolerance_match",
+      "expected_bars": 5040,
+      "actual_bars": 5000,
+      "max_price_diff": 0.0,
+      "max_volume_diff": 0.0,
+      "mismatch_count": 0,
+      "missing_in_expected": 0,
+      "missing_in_actual": 40,
+      "mismatches": [],
+      "note": "rows differ in count but all overlapping rows match exactly"
+    }
+  },
+  "skipped": [
+    {
+      "symbol": "SET:SET",
+      "reason": "Known deferred (Phase 3: SET index/sectors)"
+    }
+  ]
+}

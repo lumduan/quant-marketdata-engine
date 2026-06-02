@@ -13,7 +13,7 @@ of the TradingView (tvkit) auth cookie**. It is a FastAPI service on container p
 `market_data.*` tables in `quant-infra-db` (TimescaleDB) and ships its **own Redis
 sidecar** (hot-window cache + single-flight fetch lock).
 
-> **Current state: live (Phase 4 complete, 2026-06-02).** The service is a running FastAPI
+> **Current state: live (Phase 5 in progress, 2026-06-02).** The service is a running FastAPI
 > app — read API (`GET /health`, `/ohlcv`, `/ohlcv/adjusted`, `/universe`) + owner-mode
 > `POST /admin/ingest`, an own Redis sidecar (hot-window cache + single-flight lock), the
 > asyncpg layer over `db_market_data`, the tvkit ingest path (CLI + admin endpoint), and the
@@ -21,8 +21,10 @@ sidecar** (hot-window cache + single-flight fetch lock).
 > cold-path auto-fetch-on-read is deferred (the single-flight primitive is built).
 > **Phase 3 (reader cutover — csm-set) is complete** (2026-06-01); **Phase 4 (reader cutover
 > — tfex-s50-multi-tf-swing) is complete** (2026-06-02). **Phase 5 (end-to-end verification &
-> cutover) is planned; Phase 6 (documentation — tvkit-ref style, AI-agent-first) is planned.**
-> See [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md).
+> cutover) is in progress** — verification plan, scripts, and unit tests built
+> (`docs/plans/phase5-end-to-end-verification-cutover.md`, `tests/verification/`); live Tier 1
+> verification + cutover pending. **Phase 6 (documentation — tvkit-ref style,
+> AI-agent-first) is planned.** See [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md).
 
 ### Ownership boundaries (the whole point of this service)
 

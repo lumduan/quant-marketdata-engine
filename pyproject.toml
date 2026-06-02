@@ -27,6 +27,10 @@ dependencies = [
 ]
 
 [dependency-groups]
+verification = [
+    "pandas>=2.2",
+    "polars>=1.0",
+]
 dev = [
     "ruff>=0.6",
     "mypy>=1.10",

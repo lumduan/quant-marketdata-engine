@@ -2051,6 +2051,10 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+verification = [
+    { name = "pandas" },
+    { name = "polars" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2075,6 +2079,10 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "pytest-cov", specifier = ">=5" },
     { name = "ruff", specifier = ">=0.6" },
+]
+verification = [
+    { name = "pandas", specifier = ">=2.2" },
+    { name = "polars", specifier = ">=1.0" },
 ]
 
 [[package]]
