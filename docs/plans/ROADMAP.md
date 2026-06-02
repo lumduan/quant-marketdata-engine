@@ -410,12 +410,12 @@ follow-ups: engine 4h route, engine native back-adjusted S501! (Phase-5), infra-
 > Goal: prove the whole system runs off one producer with one credential, then
 > decommission the per-strategy fetch.
 
-- [ ] Bring-up order: `quant-infra-db` → `quant-marketdata-engine` → `quant-api-gateway`
-  → strategies → `quant-openbb`
-- [ ] One scheduled ingest serves **both** strategies (deduped at the store)
-- [ ] Verify **point-in-time + adjusted correctness** on a known corporate action
-  (adjustment-math parity vs the tvkit dividend-adjusted series strategies were validated
-  on — diff-test before cutover)
+- [x] Verification plan authored: [`phase5-end-to-end-verification-cutover.md`](phase5-end-to-end-verification-cutover.md)
+- [x] Verification scripts built: `tests/verification/` (verify_csm_parity.py, verify_tfex_parity.py, verification_utils.py)
+- [x] Verification unit tests (21 tests, all green)
+- [ ] Run Tier 1 verification (engine vs Parquet) for csm-set and tfex
+- [ ] If 100% parity: flip strategy defaults + add deprecation warnings + update docs
+- [ ] If <100% parity: gap analysis document, issues filed, cutover deferred to Phase 5.1
 - [ ] Confirm **no strategy fetches tvkit directly** anymore
 - [ ] Confirm backtest read performance (Parquet snapshot path as fast as today's local
   Parquet; DB must not become a backtest bottleneck)
@@ -606,7 +606,7 @@ These are enforced as phase exit criteria where relevant:
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 5 — End-to-end verification & cutover (planned).
+- **Active phase:** Phase 5 — End-to-end verification & cutover (verification scripts built, live verification pending).
   **Phase 4 is complete** (2026-06-02): tfex reads the shared store behind
   `TFEX_S50_MULTI_TF_SWING_OHLCV_SOURCE = mirror | engine`; 09 mirror demoted to a derived
   cache; back-adjusted continuous built locally; gate green (306 passed @ 96.36%).
@@ -619,8 +619,10 @@ These are enforced as phase exit criteria where relevant:
   [`phase1-quant-infra-db-market-data-schema.md`](phase1-quant-infra-db-market-data-schema.md),
   [`phase2-service-build-and-gateway-proxy.md`](phase2-service-build-and-gateway-proxy.md),
   [`phase3-csm-set-read-from-store.md`](phase3-csm-set-read-from-store.md),
-  [`phase4-tfex-consume-shared-store.md`](phase4-tfex-consume-shared-store.md).
-- **Phase 5 (planned):** end-to-end verification & cutover; one scheduled ingest; adjustment
-  parity diff-test; per-strategy tvkit fetch decommissioned; cutover runbook authored.
+  [`phase4-tfex-consume-shared-store.md`](phase4-tfex-consume-shared-store.md),
+  [`phase5-end-to-end-verification-cutover.md`](phase5-end-to-end-verification-cutover.md).
+- **Phase 5 (in progress — scripts built):** verification plan authored; `tests/verification/`
+  package with verify_csm_parity.py, verify_tfex_parity.py, verification_utils.py; 21 unit
+  tests green. Live Tier 1 verification + cutover pending (requires running stack).
 - **Phase 6 (planned):** documentation parity with tvkit (structured `docs/` hierarchy,
   AI-agent-first `.claude/` resources, refreshed repo-level docs).
