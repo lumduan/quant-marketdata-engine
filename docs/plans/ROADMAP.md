@@ -354,41 +354,54 @@ upsert (no N+1). Plan: [`phase2-service-build-and-gateway-proxy.md`](phase2-serv
 
 ---
 
-## Phase 3 — `strategies/csm-set`: read from the store behind a flag 🧠
+## Phase 3 — `strategies/csm-set`: read from the store behind a flag 🧠 ✅ flag complete (2026-06-01)
 
 > **Lands in `csm-set`'s own PR.** This service is the data source; csm-set becomes a
-> reader.
+> reader. Shipped as `1de4d65` on `origin/live-test` (csm-set).
 
-- [ ] Add `CSM_OHLCV_SOURCE = parquet | db` (default `parquet`); `db` reads this engine's
+- [x] Add `CSM_OHLCV_SOURCE = parquet | db` (default `parquet`); `db` reads this engine's
   read API / Parquet snapshot instead of fetching tvkit
-- [ ] Demote csm-set's local Parquet to a **derived backtest cache** (materialised from the
+- [x] Demote csm-set's local Parquet to a **derived backtest cache** (materialised from the
   DB); **stop the per-strategy tvkit fetch** in `daily_refresh` when `source=db`
 - [ ] Fix the 2026-05-29 live-test gap: include `SET:SET` index + sectors so
-  `residual_momentum` / composite compute every session
+  `residual_momentum` / composite compute every session — **⏭ deferred** (not in `1de4d65`;
+  different code area: universe / feature pipeline). Tracked as a csm-set follow-up.
 
 **Exit criteria:** csm-set runs identically on `db` source; `test_public_data_boundary_*`
-still pass; no behaviour change vs Parquet for the same dates.
+still pass; no behaviour change vs Parquet for the same dates. — **MET for the reader flag**
+(2026-06-01); the index/sectors gap fix is the only outstanding Phase 3 item.
 
 ---
 
-## Phase 4 — `strategies/tfex-s50-multi-tf-swing`: consume shared store 📉
+## Phase 4 — `strategies/tfex-s50-multi-tf-swing`: consume shared store 📉 ✅ in progress (2026-06-02)
 
 > **Lands in tfex's own PR.** Reconciles the existing `09` mirror against this engine's
-> canonical schema.
+> canonical schema. Plan: [`phase4-tfex-consume-shared-store.md`](phase4-tfex-consume-shared-store.md).
+> Shipped on `feat/phase4-consume-marketdata-engine` (off `main`, tfex repo).
 
-- [ ] Point tfex's data layer at the shared `market_data` store
-- [ ] **Reconcile or retire** tfex's Phase-1 standalone TimescaleDB OHLCV mirror
+- [x] Point tfex's data layer at the shared `market_data` store —
+  `TFEX_S50_MULTI_TF_SWING_OHLCV_SOURCE = mirror | engine` (default `mirror`); `engine`
+  reads `/ohlcv` via the gateway proxy at the `refresh_all` seam; no tvkit cookie on that path
+- [x] **Reconcile or retire** tfex's Phase-1 standalone TimescaleDB OHLCV mirror
   (`db_tfex_s50_multi_tf_swing.ohlcv_raw` / `.ohlcv_continuous`, schema `09`) so there is
-  one canonical store — per the Phase 0 seed-vs-retire decision
-- [ ] Multi-TF (5m / 1h / 4h **+ 1d**) via Option A; `1d` futures = settlement (never
-  rolled up)
-- [ ] Consume the **`S501!` continuous** per the ADR's (a)/(b) decision; carry
-  `open_interest`
-- [ ] Decide intraday handling per Phase 0 (Timescale hot window — the lake is not needed
-  for S50)
+  one canonical store — **demoted to a derived local cache** in code + docs; the physical
+  DROP is a tracked `quant-infra-db` follow-up (default `mirror` path still writes 09)
+- [~] Multi-TF (5m / 1h / 4h **+ 1d**) via Option A; `1d` futures = settlement (never
+  rolled up) — **5m/1h served from the engine as-stored**; `1d` settlement available
+  engine-side (tfex consumes later); **4h deferred** — the engine read API has no 4h route
+  (`cagg_ohlcv_4h` unrouted), declined client-side with a typed error, **no local rollup**
+  (D10). Follow-up: engine 4h route → one-line tfex enablement
+- [x] Consume the **`S501!` continuous** per the ADR's (a)/(b) decision; carry
+  `open_interest` — option **(b)** back-adjusted, **built locally** from raw dated contracts
+  (`/ohlcv?adjusted=false`) because the engine's native futures-roll back-adjustment is
+  unbuilt (Phase-5 adjustment-parity); `open_interest` carried (NULL for equities)
+- [x] Decide intraday handling per Phase 0 (Timescale hot window — the lake is not needed
+  for S50) — **resolved: Timescale hot window** (D5)
 
 **Exit criteria:** tfex backtests/live read the shared store; the duplicate mirror is
-removed or demoted to a cache; no per-host tvkit credential needed.
+removed or demoted to a cache; no per-host tvkit credential needed. — **MET**: `engine` path
+reads the shared store with no cookie; the 09 mirror is demoted to a cache. Outstanding
+follow-ups: engine 4h route, engine native back-adjusted S501! (Phase-5), infra-db 09 drop.
 
 ---
 
@@ -487,17 +500,24 @@ These are enforced as phase exit criteria where relevant:
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 3 — `strategies/csm-set` reads behind a flag. **Phase 2 is
-  complete** (2026-06-01): this service is now a live FastAPI app (read API + owner-mode
-  ingest) over the `db_market_data` schema, with its own Redis sidecar + compose, and the
-  gateway proxies `/api/v2/engines/market-data/*` to it. Read path = hot/warm (Redis → DB →
-  write-through); cold-path auto-fetch-on-read is deferred (single-flight primitive built).
+- **Active phase:** Phase 4 — `strategies/tfex-s50-multi-tf-swing` consumes the shared store.
+  **Phase 3 (reader flag) is complete** (2026-06-01): csm-set reads the engine behind
+  `CSM_OHLCV_SOURCE = parquet | db` (`1de4d65` on `origin/live-test`); the only outstanding
+  Phase 3 item is the deferred SET:SET index/sectors gap fix. **Phase 2 remains complete**
+  (2026-06-01): a live FastAPI app (read API + owner-mode ingest) over `db_market_data` with
+  its own Redis sidecar + compose, gateway-proxied; read path hot/warm; cold-path deferred.
 - **Completed:** Phase 0 (§0.1–§0.4); **Phase 1** (schema + `src/db` in `quant-infra-db`;
   unit 96 @ 98.4%, infra 19/19); **Phase 2** (this repo: ingest/api/cache/db/snapshot +
-  compose, 95 tests @ 98.9%; gateway proxy + catalog, 336 tests @ 90.6%). Phase plans:
+  compose, 95 tests @ 98.9%; gateway proxy + catalog, 336 tests @ 90.6%); **Phase 3** (reader
+  flag — csm-set, `1de4d65`). Phase plans:
   [`phase0-adr-repo-bootstrap.md`](phase0-adr-repo-bootstrap.md),
   [`phase1-quant-infra-db-market-data-schema.md`](phase1-quant-infra-db-market-data-schema.md),
-  [`phase2-service-build-and-gateway-proxy.md`](phase2-service-build-and-gateway-proxy.md).
-- Branches: `feat/phase2-service-build` (this repo), `feat/market-data-engine-proxy`
-  (gateway), `docs/market-data-phase2` (umbrella). Merge/bring-up order: infra-db (merged) →
-  this engine → gateway → umbrella docs.
+  [`phase2-service-build-and-gateway-proxy.md`](phase2-service-build-and-gateway-proxy.md),
+  [`phase3-csm-set-read-from-store.md`](phase3-csm-set-read-from-store.md),
+  [`phase4-tfex-consume-shared-store.md`](phase4-tfex-consume-shared-store.md).
+- **Phase 4 (in progress, 2026-06-02):** tfex reads the shared store behind
+  `TFEX_S50_MULTI_TF_SWING_OHLCV_SOURCE = mirror | engine`; 09 mirror demoted to a derived
+  cache; back-adjusted continuous built locally; gate green (306 passed @ 96.36%). Branches:
+  `feat/phase4-consume-marketdata-engine` (tfex), `docs/phase4-tfex-consume-plan` (this repo),
+  `docs/market-data-phase4` (umbrella). Follow-ups: engine 4h route, engine native
+  back-adjusted S501! (Phase-5 adjustment-parity), infra-db schema-09 drop.
