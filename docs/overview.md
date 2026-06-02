@@ -7,8 +7,11 @@ by `quant-api-gateway` under `/api/v2/engines/market-data/*`. It writes canonica
 `market_data.*` tables in `quant-infra-db` (TimescaleDB); strategies **read**, they never
 fetch tvkit.
 
-> **Scaffold only.** No fetch / storage / read-API / Redis logic exists yet — that is the
-> Phase 2+ build target, gated on the Phase 0 ADR.
+> **Live (Phase 5 in progress, 2026-06-02).** The service is a running FastAPI read API
+> (`/health`, `/ohlcv`, `/ohlcv/adjusted`, `/universe`) + owner-mode `/admin/ingest`, with its
+> own Redis sidecar and the asyncpg layer over `db_market_data`. The read path is hot/warm
+> (Redis → DB → write-through); cold-path auto-fetch is deferred. **Start at the documentation
+> hub: [`README.md`](README.md).**
 
 ## Where the real documentation lives
 
@@ -25,8 +28,9 @@ fetch tvkit.
 
 The **ingest side** (the only holder of `TVKIT_AUTH_TOKEN`) fetches bars via tvkit and
 idempotently upserts raw OHLCV + corporate actions / roll dates into TimescaleDB. The
-**read side** resolves `(symbol, timeframe, range)` through a hot/warm/cold path (own Redis
-sidecar → TimescaleDB → on-miss ingest), applies adjust-on-read for adjusted/continuous
+**read side** resolves `(symbol, timeframe, range)` through a hot/warm path (own Redis
+sidecar → TimescaleDB → write-through; cold-path on-miss ingest is deferred), applies
+adjust-on-read for adjusted/continuous
 series, and returns a uniform contract through the gateway. A Parquet snapshot exporter
 materialises the DB for offline backtest scans. See [`plans/ROADMAP.md`](plans/ROADMAP.md)
 for the phase-by-phase build.

@@ -11,7 +11,15 @@ Distilled from the umbrella design docs under
 > backfill), `api/` (read API + owner-mode `/admin/ingest`), `snapshot/` (DB → Parquet). The
 > read path is **hot/warm** (Redis → DB → write-through); cold-path auto-fetch-on-read is
 > deferred (single-flight primitive built, ingest is a separate path). The gateway proxies
-> `/api/v2/engines/market-data/*` here. Phase 3 (csm-set reader behind a flag) is next.
+> `/api/v2/engines/market-data/*` here. Phases 3 (csm-set) and 4 (tfex) reader flags shipped;
+> **Phase 5** is partial (csm-set cut over & verified, tfex pending); **Phase 6 docs** shipped.
+
+> **Phase 6 documentation (2026-06-02).** Reference docs now live under
+> [`../../docs/`](../../docs/) (hub: [`../../docs/README.md`](../../docs/README.md)) —
+> architecture, API (with curl examples), operations, and data-model. Companion knowledge:
+> [`data-flow.md`](data-flow.md), [`deployment.md`](deployment.md),
+> [`api-contract.md`](api-contract.md). This file remains the design-rationale digest; the
+> `docs/` tree is the operate/extend reference.
 
 ---
 

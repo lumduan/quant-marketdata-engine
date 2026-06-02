@@ -412,17 +412,22 @@ follow-ups: engine 4h route, engine native back-adjusted S501! (Phase-5), infra-
 
 - [x] Verification plan authored: [`phase5-end-to-end-verification-cutover.md`](phase5-end-to-end-verification-cutover.md)
 - [x] Verification scripts built: `tests/verification/` (verify_csm_parity.py, verify_tfex_parity.py, verification_utils.py)
-- [x] Verification unit tests (21 tests, all green)
-- [ ] Run Tier 1 verification (engine vs Parquet) for csm-set and tfex
-- [ ] If 100% parity: flip strategy defaults + add deprecation warnings + update docs
-- [ ] If <100% parity: gap analysis document, issues filed, cutover deferred to Phase 5.1
-- [ ] Confirm **no strategy fetches tvkit directly** anymore
-- [ ] Confirm backtest read performance (Parquet snapshot path as fast as today's local
-  Parquet; DB must not become a backtest bottleneck)
-- [ ] Runbook authored in the umbrella `.claude/playbooks/`
+- [x] Verification unit tests (21 tests, all green — `uv run pytest tests/verification/`)
+- [~] Run Tier 1 verification (engine vs Parquet): **csm-set done** (691 symbols, 100% parity —
+  `reports/verification-csm.json`); **tfex deferred** (no mirror Parquet / no TFEX data)
+- [~] If 100% parity: flip defaults + deprecation + docs — **csm-set done** (`CSM_OHLCV_SOURCE`
+  default `db`, PR `lumduan/csm-set#15`); **tfex cutover pending Phase 5.x** (still `mirror`)
+- [ ] If <100% parity: gap analysis — **N/A** (csm 100%; tfex deferred is no-data, not a gap)
+- [~] Confirm **no strategy fetches tvkit directly**: csm ✓ (default `db`); **tfex still
+  defaults to tvkit-direct `mirror`** — pending Phase 5.x
+- [ ] Confirm backtest read performance (Parquet snapshot path as fast as local Parquet) —
+  **not yet documented** (pending)
+- [x] Runbook authored in the umbrella `.claude/playbooks/` —
+  `marketdata-engine-cutover.md` (csm done; tfex flagged pending Phase 5.x)
 
-**Exit criteria:** single daily ingest; both strategies consistent on the same closes; the
-per-strategy tvkit fetch is decommissioned; the cutover runbook exists.
+**Exit criteria:** single daily ingest ✓; both strategies consistent on the same closes —
+csm verified (100%), **tfex pending**; per-strategy tvkit fetch decommissioned — csm ✓,
+**tfex pending**; cutover runbook exists ✓.
 
 ---
 
@@ -439,71 +444,43 @@ per-strategy tvkit fetch is decommissioned; the cutover runbook exists.
 
 ### 6.1 Agent Context refresh
 
-- [ ] `CLAUDE.md` — add Documentation section indexing all (planned) doc files and
-  `.claude/` resources with one-line summaries and project-relative paths; mark
-  create-in-Phase-6 files with `(TODO: Phase 6)`; update Current State to Phase 4 done,
-  Phase 5 planned, Phase 6 planned; add documentation standards to Quality gates
-- [ ] `.claude/knowledge/` — author missing knowledge files:
-  `architecture.md` (service topology, component interaction),
-  `data-flow.md` (read/write paths, cache hierarchy, single-flight lock),
-  `deployment.md` (compose topology, host ports, env var reference),
-  `api-contract.md` (full request/response shape, error codes, status codes)
-- [ ] `.claude/knowledge/market-data-engine.md` — refresh to cover Phase 2–5 decisions
-  with cross-refs to new architecture/api/data docs
+- [x] `CLAUDE.md` — Documentation section indexes all doc files + `.claude/` resources;
+  focused-core files flipped to live links, remaining tree marked `(TODO: Phase 6.x)`;
+  Current State updated (Phase 4 done, Phase 5 partial, Phase 6 docs shipped); documentation
+  standards in Quality gates
+- [x] `.claude/knowledge/` — authored `data-flow.md`, `deployment.md`, `api-contract.md`
+  (`architecture.md` already existed)
+- [x] `.claude/knowledge/market-data-engine.md` — refreshed with cross-refs to the new
+  architecture/api/data docs
 - [ ] `.claude/playbooks/` — author missing playbooks:
-  `docs-workflow.md` (how to add a doc, cross-reference rules, review process),
-  `data-refresh.md` (trigger full historical refresh, monitor progress, verify integrity),
-  `troubleshooting.md` (common failure modes: cookie expiry, Redis OOM, TimescaleDB
-  chunk issues, gateway proxy 502s)
-- [ ] `.claude/playbooks/development-workflow.md` — refresh for end-to-end verification
-  scripts and cutover runbook reference
+  `docs-workflow.md`, `data-refresh.md`, `troubleshooting.md` — **(TODO: Phase 6.x)**
+- [ ] `.claude/playbooks/development-workflow.md` — refresh for verification scripts +
+  cutover runbook reference — **(TODO: Phase 6.x)**
 - [ ] `.claude/playbooks/feature-development.md` — add documentation checklist step
-  (docs must be included or planned in every feature PR)
-- [ ] `.claude/memory/` — add `cookie-management.md` (tvkit token refresh schedule,
-  expiry handling, debugging auth issues)
+  — **(TODO: Phase 6.x)**
+- [ ] `.claude/memory/` — add `cookie-management.md` — **(TODO: Phase 6.x)**
 
 ### 6.2 docs/ Structure (tvkit-inspired hierarchy)
 
-- [ ] `docs/architecture/` — subdirectory for system-architecture docs:
-  `overview.md` (moved from `docs/overview.md`; system topology, component interaction),
-  `data-model.md` (schema, PKs, indexes, CAGGs, compression policy),
-  `security-boundary.md` (auth gate, cookie ownership, public-data boundary)
-- [ ] `docs/api/` — subdirectory for endpoint reference with curl examples:
-  `ohlcv.md` (GET /ohlcv — raw bars, all params, response shape),
-  `ohlcv-adjusted.md` (GET /ohlcv/adjusted — adjust-on-read view),
-  `universe.md` (GET /universe — as-of dated constituents),
-  `health.md` (GET /health — health check response shape),
-  `admin-ingest.md` (POST /admin/ingest — owner-mode ingest endpoint)
-- [ ] `docs/operations/` — subdirectory for ops/runbook docs:
-  `bring-up.md` (service bring-up order, compose files, network prerequisites),
-  `configuration.md` (all `MARKETDATA_ENGINE_*` env vars, public vs owner mode),
-  `monitoring.md` (health checks, logging, alerting),
-  `troubleshooting.md` (common issues: cookie expiry, DB connection, Redis sidecar),
-  `scheduled-ingest.md` (cron/scheduler setup, idempotency guarantees)
-- [ ] `docs/data/` — subdirectory for data model docs:
-  `ohlcv-schema.md` (OHLCV table schema, PK, constraints, compression, retention),
-  `corporate-actions.md` (corporate actions table, roll dates, adjust-on-read math),
-  `universe-membership.md` (as-of dated constituents, point-in-time correctness),
-  `parquet-snapshot.md` (Parquet backtest cache, export format, offline usage)
-- [ ] `docs/getting-started/` — subdirectory for onboarding:
-  `quickstart.md` (5-minute local dev setup from clone to health check),
-  `local-development.md` (full local dev env, test data, mocking tvkit),
-  `public-vs-owner-mode.md` (running in public read-only vs owner ingest mode)
-- [ ] `docs/concepts/` — subdirectory for conceptual docs:
-  `adjust-on-read.md` (why raw + corporate actions, not cached adjusted series),
-  `single-flight-fetch.md` (deduping concurrent identical fetches via Redis lock),
-  `tvkit-cookie-ownership.md` (why only this service holds the cookie),
-  `continuous-vs-per-contract.md` (S501! continuous, dated contracts, roll back-adjustment)
-- [ ] `docs/reference/` — subdirectory for reference material:
-  `settings.md` (all settings with defaults, types, descriptions),
-  `docker-compose-reference.md` (compose file structure, network, volumes, healthchecks),
-  `gateway-proxy-contract.md` (proxy URL mapping, timeout/error code mapping),
-  `error-codes.md` (all typed error codes and user-facing messages)
-- [ ] `docs/guides/` — subdirectory for how-to guides:
-  `adding-a-new-reader.md` (how to add a new strategy as a reader of the engine),
-  `tvkit-token-rotation.md` (cookie refresh/renewal procedure)
-- [ ] `docs/README.md` — hub page with one-line description linking every sub-doc
-  (mirrors tvkit's README-as-hub pattern)
+> **Focused-core set shipped (2026-06-02).** The high-value architecture/api/operations/data
+> docs + the hub are written; the getting-started/concepts/reference/guides subtrees are
+> deferred to Phase 6.x (tracked below).
+
+- [x] `docs/architecture/` — `overview.md`, `data-model.md`, `security-boundary.md`
+- [x] `docs/api/` — `health.md`, `ohlcv.md`, `ohlcv-adjusted.md`, `universe.md`,
+  `admin-ingest.md` (each with curl request + response examples)
+- [~] `docs/operations/` — `bring-up.md`, `configuration.md`, `troubleshooting.md` **done**;
+  `monitoring.md`, `scheduled-ingest.md` **(TODO: Phase 6.x)**
+- [x] `docs/data/` — `ohlcv-schema.md`, `corporate-actions.md`, `universe-membership.md`,
+  `parquet-snapshot.md`
+- [ ] `docs/getting-started/` — `quickstart.md`, `local-development.md`,
+  `public-vs-owner-mode.md` — **(TODO: Phase 6.x)**
+- [ ] `docs/concepts/` — `adjust-on-read.md`, `single-flight-fetch.md`,
+  `tvkit-cookie-ownership.md`, `continuous-vs-per-contract.md` — **(TODO: Phase 6.x)**
+- [ ] `docs/reference/` — `settings.md`, `docker-compose-reference.md`,
+  `gateway-proxy-contract.md`, `error-codes.md` — **(TODO: Phase 6.x)**
+- [ ] `docs/guides/` — `adding-a-new-reader.md`, `tvkit-token-rotation.md` — **(TODO: Phase 6.x)**
+- [x] `docs/README.md` — hub page linking every sub-doc (README-as-hub pattern)
 
 ### 6.3 Repo-level Docs refresh
 
@@ -606,11 +583,13 @@ These are enforced as phase exit criteria where relevant:
 
 > Update this section as phases complete.
 
-- **Active phase:** Phase 5 — End-to-end verification & cutover (verification scripts built, live verification pending).
-  **Phase 4 is complete** (2026-06-02): tfex reads the shared store behind
-  `TFEX_S50_MULTI_TF_SWING_OHLCV_SOURCE = mirror | engine`; 09 mirror demoted to a derived
-  cache; back-adjusted continuous built locally; gate green (306 passed @ 96.36%).
-  **Phase 6 — Documentation is planned**, with tvkit-ref structure and AI-agent-first design.
+- **Active phase:** Phase 5 — End-to-end verification & cutover (**partial**): csm-set is
+  **cut over and verified** (`CSM_OHLCV_SOURCE` default `db`; 691 symbols, 100% parity —
+  `reports/verification-csm.json`); **tfex verification + cutover are deferred** (no mirror
+  Parquet / no TFEX data; `TFEX_S50_MULTI_TF_SWING_OHLCV_SOURCE` still defaults `mirror`).
+  **Phase 4 is complete** (2026-06-02). **Phase 6 — Documentation: the focused-core `docs/`
+  set is shipped** (hub + architecture ×3, api ×5, operations ×3, data ×4; remaining
+  tvkit-tree subtrees are Phase 6.x). Plan: [`phase6-documentation.md`](phase6-documentation.md).
 - **Completed:** Phase 0 (§0.1–§0.4); **Phase 1** (schema + `src/db` in `quant-infra-db`;
   unit 96 @ 98.4%, infra 19/19); **Phase 2** (this repo: ingest/api/cache/db/snapshot +
   compose, 95 tests @ 98.9%; gateway proxy + catalog, 336 tests @ 90.6%); **Phase 3** (reader
@@ -624,5 +603,9 @@ These are enforced as phase exit criteria where relevant:
 - **Phase 5 (in progress — scripts built):** verification plan authored; `tests/verification/`
   package with verify_csm_parity.py, verify_tfex_parity.py, verification_utils.py; 21 unit
   tests green. Live Tier 1 verification + cutover pending (requires running stack).
-- **Phase 6 (planned):** documentation parity with tvkit (structured `docs/` hierarchy,
-  AI-agent-first `.claude/` resources, refreshed repo-level docs).
+- **Phase 6 (focused core shipped, 2026-06-02):** `docs/` hub + architecture/api/operations/
+  data docs (example-driven, AI-agent-first) and the 3 `.claude/knowledge` files
+  (data-flow, deployment, api-contract). Consolidated cutover runbook authored in the umbrella
+  (`.claude/playbooks/marketdata-engine-cutover.md`). Remaining tvkit subtrees
+  (getting-started/concepts/reference/guides, extra playbooks, repo-level CHANGELOG/CONTRIBUTING
+  refresh) are tracked as Phase 6.x. Plan: [`phase6-documentation.md`](phase6-documentation.md).
