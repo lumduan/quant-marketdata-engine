@@ -23,8 +23,12 @@ sidecar** (hot-window cache + single-flight fetch lock).
 > — tfex-s50-multi-tf-swing) is complete** (2026-06-02). **Phase 5 (end-to-end verification &
 > cutover) is in progress** — verification plan, scripts, and unit tests built
 > (`docs/plans/phase5-end-to-end-verification-cutover.md`, `tests/verification/`); live Tier 1
-> verification + cutover pending. **Phase 6 (documentation — tvkit-ref style,
-> AI-agent-first) is planned.** See [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md).
+> verification + cutover pending (csm-set cut over & verified; **tfex cutover/verification
+> pending Phase 5.x**). **Phase 6 (documentation — tvkit-ref style, AI-agent-first): the
+> focused-core `docs/` set is shipped** (hub [`docs/README.md`](docs/README.md); architecture
+> ×3, api ×5, operations ×3, data ×4) — remaining tvkit-tree files stay `(TODO: Phase 6.x)`.
+> See [`docs/plans/ROADMAP.md`](docs/plans/ROADMAP.md) and
+> [`docs/plans/phase6-documentation.md`](docs/plans/phase6-documentation.md).
 
 ### Ownership boundaries (the whole point of this service)
 
@@ -186,75 +190,82 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Community standards |
 | [`LICENSE`](LICENSE) | MIT license |
 
-### docs/ — Architecture (TODO: Phase 6)
+### docs/ — Hub
 
 | File | Summary |
 |------|---------|
-| `docs/architecture/overview.md` (TODO: Phase 6) | System topology, component interaction, data flow |
-| `docs/architecture/data-model.md` (TODO: Phase 6) | Schema, PKs, indexes, CAGGs, compression policy |
-| `docs/architecture/security-boundary.md` (TODO: Phase 6) | Auth gate, cookie ownership, public-data boundary |
+| [`docs/README.md`](docs/README.md) | Documentation hub — one-line links to every sub-doc |
+| [`docs/overview.md`](docs/overview.md) | One-paragraph service overview + pointers |
 
-### docs/ — API Reference (TODO: Phase 6)
-
-| File | Summary |
-|------|---------|
-| `docs/api/ohlcv.md` (TODO: Phase 6) | GET /ohlcv — raw bars request/response with curl examples |
-| `docs/api/ohlcv-adjusted.md` (TODO: Phase 6) | GET /ohlcv/adjusted — adjust-on-read view |
-| `docs/api/universe.md` (TODO: Phase 6) | GET /universe — as-of dated constituents |
-| `docs/api/health.md` (TODO: Phase 6) | GET /health — health check response shape |
-| `docs/api/admin-ingest.md` (TODO: Phase 6) | POST /admin/ingest — owner-mode ingest endpoint |
-
-### docs/ — Operations (TODO: Phase 6)
+### docs/ — Architecture
 
 | File | Summary |
 |------|---------|
-| `docs/operations/bring-up.md` (TODO: Phase 6) | Service bring-up order, compose files, network prerequisites |
-| `docs/operations/configuration.md` (TODO: Phase 6) | All `MARKETDATA_ENGINE_*` env vars, public vs owner mode |
-| `docs/operations/monitoring.md` (TODO: Phase 6) | Health checks, logging, alerting |
-| `docs/operations/troubleshooting.md` (TODO: Phase 6) | Common issues: cookie expiry, DB connection, Redis sidecar |
-| `docs/operations/scheduled-ingest.md` (TODO: Phase 6) | Cron/scheduler setup, idempotency guarantees |
+| [`docs/architecture/overview.md`](docs/architecture/overview.md) | System topology, ingest/read sides, hot/warm path, gateway proxy |
+| [`docs/architecture/data-model.md`](docs/architecture/data-model.md) | Schema, PKs, indexes, CAGGs, compression policy |
+| [`docs/architecture/security-boundary.md`](docs/architecture/security-boundary.md) | Auth gate, cookie ownership, public-data boundary |
 
-### docs/ — Data (TODO: Phase 6)
+### docs/ — API Reference
 
 | File | Summary |
 |------|---------|
-| `docs/data/ohlcv-schema.md` (TODO: Phase 6) | OHLCV table schema, PK, constraints, compression, retention |
-| `docs/data/corporate-actions.md` (TODO: Phase 6) | Corporate actions table, roll dates, adjust-on-read math |
-| `docs/data/universe-membership.md` (TODO: Phase 6) | As-of dated constituents, point-in-time correctness |
-| `docs/data/parquet-snapshot.md` (TODO: Phase 6) | Parquet backtest cache, export format, offline usage |
+| [`docs/api/health.md`](docs/api/health.md) | GET /health — health check response shape |
+| [`docs/api/ohlcv.md`](docs/api/ohlcv.md) | GET /ohlcv — raw bars request/response with curl examples |
+| [`docs/api/ohlcv-adjusted.md`](docs/api/ohlcv-adjusted.md) | GET /ohlcv/adjusted — adjust-on-read view |
+| [`docs/api/universe.md`](docs/api/universe.md) | GET /universe — as-of dated constituents |
+| [`docs/api/admin-ingest.md`](docs/api/admin-ingest.md) | POST /admin/ingest — owner-mode ingest (engine-direct) |
 
-### docs/ — Getting Started (TODO: Phase 6)
-
-| File | Summary |
-|------|---------|
-| `docs/getting-started/quickstart.md` (TODO: Phase 6) | 5-minute setup: clone → env → compose up → health check |
-| `docs/getting-started/local-development.md` (TODO: Phase 6) | Full local dev env, test data, mocking tvkit |
-| `docs/getting-started/public-vs-owner-mode.md` (TODO: Phase 6) | Running in public read-only vs owner ingest mode |
-
-### docs/ — Concepts (TODO: Phase 6)
+### docs/ — Operations
 
 | File | Summary |
 |------|---------|
-| `docs/concepts/adjust-on-read.md` (TODO: Phase 6) | Why raw + corporate actions, not cached adjusted series |
-| `docs/concepts/single-flight-fetch.md` (TODO: Phase 6) | Deduping concurrent identical fetches via Redis lock |
-| `docs/concepts/tvkit-cookie-ownership.md` (TODO: Phase 6) | Why only this service holds the cookie |
-| `docs/concepts/continuous-vs-per-contract.md` (TODO: Phase 6) | S501! continuous, dated contracts, roll back-adjustment |
+| [`docs/operations/bring-up.md`](docs/operations/bring-up.md) | Service bring-up order, compose files, network prerequisites |
+| [`docs/operations/configuration.md`](docs/operations/configuration.md) | All `MARKETDATA_ENGINE_*` env vars, public vs owner mode, reader flags |
+| [`docs/operations/troubleshooting.md`](docs/operations/troubleshooting.md) | Common issues: cookie expiry, DB/Redis down, gateway 502/503/504 |
+| `docs/operations/monitoring.md` (TODO: Phase 6.x) | Health checks, logging, alerting |
+| `docs/operations/scheduled-ingest.md` (TODO: Phase 6.x) | Cron/scheduler setup, idempotency guarantees |
 
-### docs/ — Reference (TODO: Phase 6)
-
-| File | Summary |
-|------|---------|
-| `docs/reference/settings.md` (TODO: Phase 6) | All settings with defaults, types, descriptions |
-| `docs/reference/docker-compose-reference.md` (TODO: Phase 6) | Compose file structure, network, volumes, healthchecks |
-| `docs/reference/gateway-proxy-contract.md` (TODO: Phase 6) | Proxy URL mapping, timeout/error code mapping |
-| `docs/reference/error-codes.md` (TODO: Phase 6) | All typed error codes and user-facing messages |
-
-### docs/ — Guides (TODO: Phase 6)
+### docs/ — Data
 
 | File | Summary |
 |------|---------|
-| `docs/guides/adding-a-new-reader.md` (TODO: Phase 6) | How to add a new strategy as a reader of the engine |
-| `docs/guides/tvkit-token-rotation.md` (TODO: Phase 6) | Cookie refresh/renewal procedure |
+| [`docs/data/ohlcv-schema.md`](docs/data/ohlcv-schema.md) | OHLCV table schema, PK, constraints, compression, retention |
+| [`docs/data/corporate-actions.md`](docs/data/corporate-actions.md) | Corporate actions table, roll dates, adjust-on-read math |
+| [`docs/data/universe-membership.md`](docs/data/universe-membership.md) | As-of dated constituents, point-in-time correctness |
+| [`docs/data/parquet-snapshot.md`](docs/data/parquet-snapshot.md) | Parquet backtest cache, export format, offline usage |
+
+### docs/ — Getting Started (TODO: Phase 6.x)
+
+| File | Summary |
+|------|---------|
+| `docs/getting-started/quickstart.md` (TODO: Phase 6.x) | 5-minute setup: clone → env → compose up → health check |
+| `docs/getting-started/local-development.md` (TODO: Phase 6.x) | Full local dev env, test data, mocking tvkit |
+| `docs/getting-started/public-vs-owner-mode.md` (TODO: Phase 6.x) | Running in public read-only vs owner ingest mode |
+
+### docs/ — Concepts (TODO: Phase 6.x)
+
+| File | Summary |
+|------|---------|
+| `docs/concepts/adjust-on-read.md` (TODO: Phase 6.x) | Why raw + corporate actions, not cached adjusted series |
+| `docs/concepts/single-flight-fetch.md` (TODO: Phase 6.x) | Deduping concurrent identical fetches via Redis lock |
+| `docs/concepts/tvkit-cookie-ownership.md` (TODO: Phase 6.x) | Why only this service holds the cookie |
+| `docs/concepts/continuous-vs-per-contract.md` (TODO: Phase 6.x) | S501! continuous, dated contracts, roll back-adjustment |
+
+### docs/ — Reference (TODO: Phase 6.x)
+
+| File | Summary |
+|------|---------|
+| `docs/reference/settings.md` (TODO: Phase 6.x) | All settings with defaults, types, descriptions |
+| `docs/reference/docker-compose-reference.md` (TODO: Phase 6.x) | Compose file structure, network, volumes, healthchecks |
+| `docs/reference/gateway-proxy-contract.md` (TODO: Phase 6.x) | Proxy URL mapping, timeout/error code mapping |
+| `docs/reference/error-codes.md` (TODO: Phase 6.x) | All typed error codes and user-facing messages |
+
+### docs/ — Guides (TODO: Phase 6.x)
+
+| File | Summary |
+|------|---------|
+| `docs/guides/adding-a-new-reader.md` (TODO: Phase 6.x) | How to add a new strategy as a reader of the engine |
+| `docs/guides/tvkit-token-rotation.md` (TODO: Phase 6.x) | Cookie refresh/renewal procedure |
 
 ### docs/ — Plans (tracked)
 
@@ -266,6 +277,8 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`docs/plans/phase2-service-build-and-gateway-proxy.md`](docs/plans/phase2-service-build-and-gateway-proxy.md) | Phase 2: service build + gateway proxy |
 | [`docs/plans/phase3-csm-set-read-from-store.md`](docs/plans/phase3-csm-set-read-from-store.md) | Phase 3: csm-set reads from store |
 | [`docs/plans/phase4-tfex-consume-shared-store.md`](docs/plans/phase4-tfex-consume-shared-store.md) | Phase 4: tfex consumes shared store |
+| [`docs/plans/phase5-end-to-end-verification-cutover.md`](docs/plans/phase5-end-to-end-verification-cutover.md) | Phase 5: end-to-end verification & cutover |
+| [`docs/plans/phase6-documentation.md`](docs/plans/phase6-documentation.md) | Phase 6: documentation (tvkit-ref style) |
 
 ### .claude/ — Knowledge
 
@@ -277,9 +290,9 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`.claude/knowledge/commands.md`](.claude/knowledge/commands.md) | Common CLI commands reference |
 | [`.claude/knowledge/stack-decisions.md`](.claude/knowledge/stack-decisions.md) | Technology stack decisions |
 | [`.claude/knowledge/project-skill.md`](.claude/knowledge/project-skill.md) | Project-level skill definition |
-| `.claude/knowledge/data-flow.md` (TODO: Phase 6) | Read/write paths, cache hierarchy, single-flight lock |
-| `.claude/knowledge/deployment.md` (TODO: Phase 6) | Compose topology, host ports, env var reference |
-| `.claude/knowledge/api-contract.md` (TODO: Phase 6) | Full request/response shape, error codes, status codes |
+| [`.claude/knowledge/data-flow.md`](.claude/knowledge/data-flow.md) | Read/write paths, cache hierarchy, single-flight lock |
+| [`.claude/knowledge/deployment.md`](.claude/knowledge/deployment.md) | Compose topology, host ports, env var reference |
+| [`.claude/knowledge/api-contract.md`](.claude/knowledge/api-contract.md) | Full request/response shape, error codes, status codes |
 
 ### .claude/ — Playbooks
 
@@ -291,9 +304,9 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`.claude/playbooks/dependency-upgrade.md`](.claude/playbooks/dependency-upgrade.md) | Dep upgrade process |
 | [`.claude/playbooks/feature-development.md`](.claude/playbooks/feature-development.md) | Feature dev workflow |
 | [`.claude/playbooks/release-checklist.md`](.claude/playbooks/release-checklist.md) | Release checklist |
-| `.claude/playbooks/docs-workflow.md` (TODO: Phase 6) | How to add a doc, cross-ref rules, review process |
-| `.claude/playbooks/data-refresh.md` (TODO: Phase 6) | Trigger full historical refresh, monitor, verify integrity |
-| `.claude/playbooks/troubleshooting.md` (TODO: Phase 6) | Common failure modes: cookie expiry, Redis OOM, 502s |
+| `.claude/playbooks/docs-workflow.md` (TODO: Phase 6.x) | How to add a doc, cross-ref rules, review process |
+| `.claude/playbooks/data-refresh.md` (TODO: Phase 6.x) | Trigger full historical refresh, monitor, verify integrity |
+| `.claude/playbooks/troubleshooting.md` (TODO: Phase 6.x) | Common failure modes: cookie expiry, Redis OOM, 502s |
 
 ### .claude/ — Memory
 
@@ -302,7 +315,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`.claude/memory/anti-patterns.md`](.claude/memory/anti-patterns.md) | Anti-patterns learned |
 | [`.claude/memory/lessons-learned.md`](.claude/memory/lessons-learned.md) | Lessons learned |
 | [`.claude/memory/recurring-bugs.md`](.claude/memory/recurring-bugs.md) | Recurring bug patterns |
-| `.claude/memory/cookie-management.md` (TODO: Phase 6) | tvkit token refresh schedule, expiry, debugging auth |
+| `.claude/memory/cookie-management.md` (TODO: Phase 6.x) | tvkit token refresh schedule, expiry, debugging auth |
 
 ### Umbrella cross-references
 
@@ -311,6 +324,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`../CLAUDE.md`](../CLAUDE.md) | Umbrella system map, engine catalog, network contract |
 | [`../.claude/knowledge/feature-market-data-engine.md`](../.claude/knowledge/feature-market-data-engine.md) | Umbrella ADR: architecture decisions D1–D10 |
 | [`../.claude/knowledge/feature-market-data-engine-reader-cutover.md`](../.claude/knowledge/feature-market-data-engine-reader-cutover.md) | Strategy cutover decisions (Phase 3/4) |
+| [`../.claude/playbooks/marketdata-engine-cutover.md`](../.claude/playbooks/marketdata-engine-cutover.md) | Consolidated cutover runbook (csm done; tfex pending) |
 | [`../plans/feature-market-data-engine/ROADMAP.md`](../plans/feature-market-data-engine/ROADMAP.md) | Umbrella feature roadmap |
 
 ## Where to look next

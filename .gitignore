@@ -43,6 +43,9 @@ coverage.xml
 
 # Local data store (Parquet snapshots, fetched bars) — DB is the source of truth
 data/
+# …but docs/data/ is documentation (data-model reference), which is git-tracked.
+!docs/data/
+!docs/data/**
 
 # Editors
 .idea/
