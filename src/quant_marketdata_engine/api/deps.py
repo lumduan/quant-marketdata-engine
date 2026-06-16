@@ -17,6 +17,7 @@ from src.quant_marketdata_engine.cache.redis_client import get_redis
 from src.quant_marketdata_engine.config.settings import Settings, get_settings
 from src.quant_marketdata_engine.db.errors import PoolNotInitializedError
 from src.quant_marketdata_engine.db.postgres import get_pool
+from src.quant_marketdata_engine.settlement.service import SettlementService
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,13 @@ logger = logging.getLogger(__name__)
 def get_settings_dep() -> Settings:
     """Return process settings."""
     return get_settings()
+
+
+def get_settlement_service(
+    settings: Settings = Depends(get_settings_dep),
+) -> SettlementService:
+    """Return a settlement service bound to the own Redis client + settings TTL."""
+    return SettlementService(get_redis(), cache_ttl_seconds=settings.settlement_cache_ttl_seconds)
 
 
 def get_pool_dep() -> asyncpg.Pool:

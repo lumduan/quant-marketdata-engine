@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     pg_pool_min_size: int = Field(default=1, ge=0, description="asyncpg pool minimum size.")
     pg_pool_max_size: int = Field(default=10, ge=1, description="asyncpg pool maximum size.")
     cache_ttl_seconds: int = Field(default=300, ge=0, description="Hot-window cache TTL.")
+    settlement_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=0,
+        description="TFEX settlement cache TTL (daily/stable public data; no credentials).",
+    )
     tvkit_timeout_seconds: float = Field(
         default=30.0, gt=0, description="Upper bound on a single tvkit fetch."
     )

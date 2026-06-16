@@ -76,3 +76,19 @@ class IngestResponse(BaseModel):
     symbol: str
     timeframe: Timeframe
     rows_written: int
+
+
+class SettlementResponse(BaseModel):
+    """TFEX daily settlement for one series (public TFEX data via settfex).
+
+    Monetary fields are ``Decimal`` serialised **as strings** on the wire.
+    ``as_of`` is the UTC time the engine fetched the quote.
+    """
+
+    symbol: str
+    settlement_price: DecimalStr | None = Field(default=None)
+    prior_settlement_price: DecimalStr | None = Field(default=None)
+    theoretical_price: DecimalStr | None = Field(default=None)
+    im: DecimalStr | None = Field(default=None)
+    mm: DecimalStr | None = Field(default=None)
+    as_of: datetime = Field(description="UTC time the quote was fetched.")

@@ -22,6 +22,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "redis>=5",
+    "settfex>=0.1.0",
     "tvkit>=0.11.1",
     "uvicorn[standard]>=0.30",
 ]
