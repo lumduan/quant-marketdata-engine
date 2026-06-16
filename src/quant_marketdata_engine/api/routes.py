@@ -19,6 +19,7 @@ from src.quant_marketdata_engine.api.deps import (
     get_pool_dep,
     get_redis_dep,
     get_settings_dep,
+    get_settlement_service,
     require_api_key,
     require_owner_mode,
 )
@@ -28,6 +29,7 @@ from src.quant_marketdata_engine.api.schemas import (
     IngestResponse,
     OHLCVBar,
     OHLCVResponse,
+    SettlementResponse,
     Timeframe,
     UniverseResponse,
 )
@@ -45,6 +47,8 @@ from src.quant_marketdata_engine.db.repositories import (
 )
 from src.quant_marketdata_engine.ingest.errors import IngestError, TvkitFetchError
 from src.quant_marketdata_engine.ingest.service import ingest_ohlcv
+from src.quant_marketdata_engine.settlement.errors import SettlementFetchError
+from src.quant_marketdata_engine.settlement.service import SettlementService
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +204,49 @@ async def get_universe(
     """Return as-of dated constituents (latest snapshot on or before ``as_of``)."""
     resolved, symbols = await fetch_universe(pool, as_of=as_of, index_name=index_name)
     return UniverseResponse(as_of=resolved, index_name=index_name, symbols=symbols)
+
+
+@router.get(
+    "/settlements/{symbol}",
+    response_model=SettlementResponse,
+    summary="TFEX daily settlement (public)",
+)
+async def get_settlement(
+    symbol: str,
+    service: SettlementService = Depends(get_settlement_service),
+) -> SettlementResponse:
+    """Return one TFEX series' daily settlement (read-through cache via settfex).
+
+    Public TFEX exchange data — **not** auth-gated (unlike raw OHLCV). An unknown
+    series (settfex 404) maps to ``404``; an upstream HTTP failure to ``502``; a
+    transport/timeout failure to ``503``.
+    """
+    try:
+        quote = await service.get(symbol)
+    except SettlementFetchError as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"unknown series: {symbol}"
+            ) from exc
+        if exc.status_code is None:
+            logger.warning("settlement upstream unreachable for %s", symbol)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="settlement source unreachable",
+            ) from exc
+        logger.warning("settlement upstream failure for %s: HTTP %s", symbol, exc.status_code)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="settlement source failed"
+        ) from exc
+    return SettlementResponse(
+        symbol=quote.symbol,
+        settlement_price=quote.settlement_price,
+        prior_settlement_price=quote.prior_settlement_price,
+        theoretical_price=quote.theoretical_price,
+        im=quote.im,
+        mm=quote.mm,
+        as_of=quote.as_of,
+    )
 
 
 @router.post(

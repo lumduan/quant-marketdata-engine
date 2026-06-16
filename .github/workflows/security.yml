@@ -54,4 +54,8 @@ jobs:
         run: uv sync --all-groups --frozen
 
       - name: Run pip-audit
-        run: uv run pip-audit
+        # CVE-2025-69872 (diskcache 5.6.3): no upstream fix exists (5.6.3 is the latest
+        # release); it is a hard transitive dep of `settfex` (the TFEX settlement source),
+        # used only for settfex's own local HTTP-session cache with settfex-controlled
+        # keys, so the attack surface here is negligible. Revisit when diskcache ships a fix.
+        run: uv run pip-audit --ignore-vuln CVE-2025-69872
