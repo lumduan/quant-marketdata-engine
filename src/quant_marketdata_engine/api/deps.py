@@ -18,6 +18,7 @@ from src.quant_marketdata_engine.config.settings import Settings, get_settings
 from src.quant_marketdata_engine.db.errors import PoolNotInitializedError
 from src.quant_marketdata_engine.db.postgres import get_pool
 from src.quant_marketdata_engine.settlement.service import SettlementService
+from src.quant_marketdata_engine.underlying_price.service import UnderlyingPriceService
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,15 @@ def get_settlement_service(
 ) -> SettlementService:
     """Return a settlement service bound to the own Redis client + settings TTL."""
     return SettlementService(get_redis(), cache_ttl_seconds=settings.settlement_cache_ttl_seconds)
+
+
+def get_underlying_price_service(
+    settings: Settings = Depends(get_settings_dep),
+) -> UnderlyingPriceService:
+    """Return an underlying-price service bound to the own Redis client + settings TTL."""
+    return UnderlyingPriceService(
+        get_redis(), cache_ttl_seconds=settings.underlying_price_cache_ttl_seconds
+    )
 
 
 def get_pool_dep() -> asyncpg.Pool:

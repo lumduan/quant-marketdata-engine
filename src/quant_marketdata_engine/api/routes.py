@@ -20,6 +20,7 @@ from src.quant_marketdata_engine.api.deps import (
     get_redis_dep,
     get_settings_dep,
     get_settlement_service,
+    get_underlying_price_service,
     require_api_key,
     require_owner_mode,
 )
@@ -31,6 +32,7 @@ from src.quant_marketdata_engine.api.schemas import (
     OHLCVResponse,
     SettlementResponse,
     Timeframe,
+    UnderlyingPriceResponse,
     UniverseResponse,
 )
 from src.quant_marketdata_engine.cache import ohlcv_cache
@@ -49,6 +51,8 @@ from src.quant_marketdata_engine.ingest.errors import IngestError, TvkitFetchErr
 from src.quant_marketdata_engine.ingest.service import ingest_ohlcv
 from src.quant_marketdata_engine.settlement.errors import SettlementFetchError
 from src.quant_marketdata_engine.settlement.service import SettlementService
+from src.quant_marketdata_engine.underlying_price.errors import UnderlyingPriceFetchError
+from src.quant_marketdata_engine.underlying_price.service import UnderlyingPriceService
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +249,57 @@ async def get_settlement(
         theoretical_price=quote.theoretical_price,
         im=quote.im,
         mm=quote.mm,
+        as_of=quote.as_of,
+    )
+
+
+@router.get(
+    "/underlying-price/{symbol}",
+    response_model=UnderlyingPriceResponse,
+    summary="TFEX series underlying spot (public)",
+)
+async def get_underlying_price(
+    symbol: str,
+    service: UnderlyingPriceService = Depends(get_underlying_price_service),
+) -> UnderlyingPriceResponse:
+    """Return a TFEX series' underlying-instrument spot (read-through cache via settfex).
+
+    For SET50 index options/futures the underlying is the SET50 index, so the
+    response's ``underlying_symbol`` differs from the requested series. Public
+    TFEX exchange data — **not** auth-gated (unlike raw OHLCV). An unknown series
+    (settfex 404) maps to ``404``; an upstream HTTP failure to ``502``; a
+    transport/timeout failure to ``503``.
+    """
+    try:
+        quote = await service.get(symbol)
+    except UnderlyingPriceFetchError as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"unknown series: {symbol}"
+            ) from exc
+        if exc.status_code is None:
+            logger.warning("underlying-price upstream unreachable for %s", symbol)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="underlying-price source unreachable",
+            ) from exc
+        logger.warning("underlying-price upstream failure for %s: HTTP %s", symbol, exc.status_code)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="underlying-price source failed"
+        ) from exc
+    return UnderlyingPriceResponse(
+        symbol=quote.symbol,
+        underlying_symbol=quote.underlying_symbol,
+        last=quote.last,
+        prior=quote.prior,
+        high=quote.high,
+        low=quote.low,
+        change=quote.change,
+        percent_change=quote.percent_change,
+        market_status=quote.market_status,
+        underlying_type=quote.underlying_type,
+        pe=quote.pe,
+        pbv=quote.pbv,
         as_of=quote.as_of,
     )
 

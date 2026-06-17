@@ -214,6 +214,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`docs/api/ohlcv-adjusted.md`](docs/api/ohlcv-adjusted.md) | GET /ohlcv/adjusted — adjust-on-read view |
 | [`docs/api/universe.md`](docs/api/universe.md) | GET /universe — as-of dated constituents |
 | [`docs/api/settlements.md`](docs/api/settlements.md) | GET /settlements/{symbol} — TFEX daily settlement (public, via settfex) |
+| [`docs/api/underlying-price.md`](docs/api/underlying-price.md) | GET /underlying-price/{symbol} — TFEX series underlying spot (public, via settfex) |
 | [`docs/api/admin-ingest.md`](docs/api/admin-ingest.md) | POST /admin/ingest — owner-mode ingest (engine-direct) |
 
 ### docs/ — Operations
