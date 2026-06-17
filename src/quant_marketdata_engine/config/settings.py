@@ -64,6 +64,11 @@ class Settings(BaseSettings):
         ge=0,
         description="TFEX settlement cache TTL (daily/stable public data; no credentials).",
     )
+    underlying_price_cache_ttl_seconds: int = Field(
+        default=60,
+        ge=0,
+        description="TFEX underlying-spot cache TTL (intraday/live public data; no credentials).",
+    )
     tvkit_timeout_seconds: float = Field(
         default=30.0, gt=0, description="Upper bound on a single tvkit fetch."
     )

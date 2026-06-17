@@ -92,3 +92,27 @@ class SettlementResponse(BaseModel):
     im: DecimalStr | None = Field(default=None)
     mm: DecimalStr | None = Field(default=None)
     as_of: datetime = Field(description="UTC time the quote was fetched.")
+
+
+class UnderlyingPriceResponse(BaseModel):
+    """TFEX underlying-instrument spot for one series (public TFEX data via settfex).
+
+    The underlying is the instrument a TFEX series tracks — for SET50 index
+    options/futures, the SET50 index — so ``underlying_symbol`` (e.g. ``"SET50"``)
+    differs from the requested ``symbol``. Price fields are ``Decimal`` serialised
+    **as strings** on the wire; ``as_of`` is the venue statistics timestamp.
+    """
+
+    symbol: str = Field(description="The requested TFEX series symbol.")
+    underlying_symbol: str = Field(description="The underlying instrument (e.g. 'SET50').")
+    last: DecimalStr | None = Field(default=None)
+    prior: DecimalStr | None = Field(default=None)
+    high: DecimalStr | None = Field(default=None)
+    low: DecimalStr | None = Field(default=None)
+    change: DecimalStr | None = Field(default=None)
+    percent_change: DecimalStr | None = Field(default=None)
+    market_status: str
+    underlying_type: str = Field(description="Underlying type (e.g. 'I' for index).")
+    pe: DecimalStr | None = Field(default=None)
+    pbv: DecimalStr | None = Field(default=None)
+    as_of: datetime = Field(description="Venue statistics timestamp (statisticsAsOf).")
