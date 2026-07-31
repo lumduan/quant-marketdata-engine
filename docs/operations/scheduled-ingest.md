@@ -145,6 +145,59 @@ so a holiday run simply re-fetches unchanged bars and upserts nothing new. That 
 here precisely because the write is idempotent, unlike the gateway write-back paths that
 fabricate carry-forward rows on closures.
 
+## Ticker changes (a symbol that fails forever)
+
+Because the refresh is store-defined, a symbol that stops existing upstream is re-requested
+**every night, forever**, and shows up in the failed-symbol list on every run. Thai tickers do
+change, so this is a recurring maintenance case, not a one-off.
+
+Diagnose before renaming — three outcomes look similar in the log but need different actions:
+
+| What you see | Meaning | Action |
+|---|---|---|
+| Symbol fails to resolve upstream, **and** is absent from `settfex.get_stock_list()` | Delisted or re-tickered | Find the successor; `rename-symbol` if it is the same company |
+| Symbol resolves but returns **no new bars** | Trading halt / suspension | Nothing to do — the refresh is correct, there is simply nothing to fetch |
+| Symbol resolves and returns bars | Not a symbol problem | Look at the run, not the ticker |
+
+The check that separates them: compare the security's name in `settfex.get_stock_list()`, and
+compare the last close on either side of the change. A **pure re-ticker** keeps the same
+company name and a continuous price; a merger or ratio change does not.
+
+```bash
+uv run python -m src.quant_marketdata_engine.ingest rename-symbol \
+  --from SET:BANPU --to SET:BANPUU
+```
+
+It moves every symbol-keyed table — `ohlcv`, `corporate_actions`, `universe_membership` — in
+one transaction. Moving `ohlcv` alone would orphan the security's corporate actions, and
+adjust-on-read joins those by symbol, so the **adjusted** series would quietly lose its
+dividend and split history rather than fail. It refuses outright, moving nothing, if any
+destination row already exists: that is a merge, not a ticker change, and needs a human.
+
+### Worked example — BANPU → BANPUU (2026-07-31)
+
+`SET:BANPU` had been the terminal fetch failure on every run since 2026-07-17. Evidence:
+
+- `SET:BANPU` no longer resolves on TradingView at all.
+- `settfex.get_stock_list()` has **no** `BANPU`, but does have **`BANPUU` — "BANPU PUBLIC
+  COMPANY LIMITED"**, the same company. A pure re-ticker.
+- Prices are continuous: BANPU's last close **5.70** (2026-05-29) → BANPUU's first **5.75**
+  (2026-07-15).
+- TradingView carries **no back-history** under `BANPUU` (2 bars only), so the history had to
+  move rather than be re-fetched.
+
+5,040 rows were moved and the series is now continuous under the live ticker.
+
+Two things the same investigation established that are **not** bugs:
+
+- **`SET:BPP` is halted, not broken.** It resolves fine and returns bars ending 2026-07-16.
+  settfex's YTD close "as of 2026-07-30" is 12.00 — identical to that last traded bar, i.e.
+  SET is carrying the last price forward. `BANPUU` is halted on the same date for the same
+  reason. Both resume automatically when trading does.
+- **2026-06-01 → 2026-07-14 is a permanent hole for this security** (~31 sessions).
+  TradingView dropped the old ticker and gives the new one no history, and the local
+  `csm-set` raw parquet also stops at 2026-05-29. Recorded rather than papered over.
+
 ## Monitoring freshness
 
 `/health` reports process liveness, not data freshness — it returned `ok` throughout the
@@ -171,6 +224,7 @@ check `/home/batt/.config/quant-pm/marketdata-ingest.log` first, then the cookie
 | `IngestDisabledError` immediately | Private overlay not layered | Include `-f docker-compose.private.yml` |
 | `CookieConfigError` immediately | `.env` missing or cookie malformed | Cookie is a JSON string with a `sessionid` key, not a JWT |
 | Exit `1` with `resolved 0 symbols` | Empty store or bad `--symbols-file` | Seed with `fetch`, or check the file path |
+| The **same** symbol fails every run | Delisted or re-tickered upstream | See [Ticker changes](#ticker-changes-a-symbol-that-fails-forever) |
 | A handful of symbols fail every run | Delisted / renamed tickers | Expected; confirm against the failed-symbol list in the log |
 | Runs succeed but `last_bar` never advances | Job scheduled in the wrong timezone | Cron is UTC — see the note above |
 

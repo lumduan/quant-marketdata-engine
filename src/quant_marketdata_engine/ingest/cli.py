@@ -12,6 +12,12 @@ are required for ``fetch`` and ``daily``; ``backfill`` only needs DB access.
 
 ``daily`` is the scheduled bulk refresh — it re-fetches a recent window for every
 symbol already in the store. See ``docs/operations/scheduled-ingest.md``.
+
+``rename-symbol`` moves a security's rows to a new ticker after a SET re-ticker, so
+the price series stays continuous and the dead symbol stops being re-requested::
+
+    uv run python -m src.quant_marketdata_engine.ingest rename-symbol \
+        --from SET:BANPU --to SET:BANPUU
 """
 
 from __future__ import annotations
@@ -25,6 +31,7 @@ from pathlib import Path
 from src.quant_marketdata_engine.cache.redis_client import close_redis, create_redis
 from src.quant_marketdata_engine.config.settings import Settings, get_settings
 from src.quant_marketdata_engine.db.postgres import close_pool, create_pool, get_pool
+from src.quant_marketdata_engine.db.repositories import rename_symbol
 from src.quant_marketdata_engine.ingest.backfill import backfill_from_dir
 from src.quant_marketdata_engine.ingest.daily import (
     DEFAULT_BARS,
@@ -79,6 +86,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Min seconds between fetch starts (upstream rate ceiling; 0 disables).",
     )
     daily.add_argument("--limit", type=int, default=None, help="Cap symbol count (smoke tests).")
+
+    rename = sub.add_parser(
+        "rename-symbol",
+        help="Move a security's rows to a new ticker (SET re-ticker / listing change).",
+    )
+    rename.add_argument("--from", dest="old_symbol", required=True, help="e.g. SET:BANPU")
+    rename.add_argument("--to", dest="new_symbol", required=True, help="e.g. SET:BANPUU")
     return parser
 
 
@@ -129,6 +143,11 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
             # resolved no symbols or lost every symbol surfaces to cron as a
             # failure instead of a silent success.
             return result.rows_written if result.ok else -1
+        if args.command == "rename-symbol":
+            moved = await rename_symbol(
+                get_pool(), old_symbol=args.old_symbol, new_symbol=args.new_symbol
+            )
+            return sum(moved.values())
         return await backfill_from_dir(
             get_pool(),
             Path(args.dir),
