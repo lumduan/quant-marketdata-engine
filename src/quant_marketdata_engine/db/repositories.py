@@ -206,6 +206,26 @@ async def upsert_universe_membership(
     return len(payload)
 
 
+async def list_tracked_symbols(pool: asyncpg.Pool, *, timeframe: str) -> list[str]:
+    """Return every symbol that already has at least one bar at ``timeframe``.
+
+    This is the symbol source for the bulk daily refresh: the store defines its
+    own coverage, so a symbol ingested once keeps being refreshed without any
+    separate universe registration. Returns an empty list when nothing is
+    tracked yet — callers decide whether that is an error.
+    """
+    try:
+        async with pool.acquire() as conn:
+            records = await conn.fetch(
+                "SELECT DISTINCT symbol FROM market_data.ohlcv "
+                "WHERE timeframe = $1 ORDER BY symbol",
+                timeframe,
+            )
+    except Exception as exc:
+        raise RepositoryError(f"list_tracked_symbols failed: {exc}") from exc
+    return [str(record["symbol"]) for record in records]
+
+
 async def fetch_universe(
     pool: asyncpg.Pool,
     *,

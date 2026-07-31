@@ -41,6 +41,7 @@ is **engine-direct, owner-mode only** (never proxied).
 | [`operations/bring-up.md`](operations/bring-up.md) | Bring-up order, compose files (public vs owner overlay), network prerequisite, health checks |
 | [`operations/configuration.md`](operations/configuration.md) | Every `MARKETDATA_ENGINE_*` env var + `TVKIT_AUTH_TOKEN`; the strategy reader flags; safe cookie injection |
 | [`operations/troubleshooting.md`](operations/troubleshooting.md) | Cookie expiry, DB/Redis down, gateway 502/503/504, public-mode ingest refusal |
+| [`operations/scheduled-ingest.md`](operations/scheduled-ingest.md) | The `daily` bulk refresh: cron setup, idempotency guarantees, exit codes, freshness monitoring |
 
 ## Data model
 
