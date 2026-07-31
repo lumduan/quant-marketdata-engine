@@ -84,6 +84,8 @@ uv run python -m src.quant_marketdata_engine.ingest fetch --symbol SET:PTT --tim
 uv run python -m src.quant_marketdata_engine.ingest backfill --dir ../strategies/csm-set/data/raw/dividends
 # The scheduled bulk refresh (every tracked symbol) — see docs/operations/scheduled-ingest.md:
 uv run python -m src.quant_marketdata_engine.ingest daily --timeframe 1d --bars 30
+# Move a security to a new ticker after a SET re-ticker (moves ohlcv + corporate_actions):
+uv run python -m src.quant_marketdata_engine.ingest rename-symbol --from SET:BANPU --to SET:BANPUU
 ```
 
 Combined quality gate (must pass before every push, matching CI):

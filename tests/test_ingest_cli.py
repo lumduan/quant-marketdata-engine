@@ -145,3 +145,33 @@ def test_main_invokes_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "_run", _fake_run)
     rc = cli.main(["fetch", "--symbol", "X", "--timeframe", "1d"])
     assert rc == 5
+
+
+async def test_run_rename_symbol(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_io(monkeypatch)
+    seen: dict[str, Any] = {}
+
+    async def _fake_rename(_pool: Any, **kw: Any) -> dict[str, int]:
+        seen.update(kw)
+        return {"ohlcv": 5040, "corporate_actions": 0, "universe_membership": 0}
+
+    monkeypatch.setattr(cli, "rename_symbol", _fake_rename)
+    from src.quant_marketdata_engine.config.settings import Settings
+
+    args = argparse.Namespace(
+        command="rename-symbol", old_symbol="SET:BANPU", new_symbol="SET:BANPUU"
+    )
+    n = await cli._run(args, Settings(_env_file=None))  # type: ignore[call-arg]
+    assert n == 5040
+    assert seen == {"old_symbol": "SET:BANPU", "new_symbol": "SET:BANPUU"}
+
+
+def test_rename_symbol_parser() -> None:
+    args = cli.build_parser().parse_args(
+        ["rename-symbol", "--from", "SET:BANPU", "--to", "SET:BANPUU"]
+    )
+    assert (args.command, args.old_symbol, args.new_symbol) == (
+        "rename-symbol",
+        "SET:BANPU",
+        "SET:BANPUU",
+    )

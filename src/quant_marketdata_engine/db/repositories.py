@@ -256,3 +256,75 @@ async def fetch_universe(
     except Exception as exc:
         raise RepositoryError(f"fetch_universe failed: {exc}") from exc
     return resolved, [str(r["symbol"]) for r in records]
+
+
+# Every symbol-keyed table, with the remaining primary-key columns that identify a
+# row once the symbol is fixed. Renaming a ticker must touch ALL of them: moving
+# ``ohlcv`` alone would orphan the symbol's corporate actions, and adjust-on-read
+# joins those by symbol — the adjusted series would silently lose its dividend and
+# split history rather than fail.
+_SYMBOL_KEYED_TABLES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("ohlcv", ("timeframe", "ts")),
+    ("corporate_actions", ("ex_date", "action_type")),
+    ("universe_membership", ("as_of", "index_name")),
+)
+
+
+async def rename_symbol(pool: asyncpg.Pool, *, old_symbol: str, new_symbol: str) -> dict[str, int]:
+    """Move every row from ``old_symbol`` to ``new_symbol``. Returns rows moved per table.
+
+    For a ticker change (the same security relisted under a new symbol) this keeps
+    the price series continuous under the live ticker, and stops the dead symbol
+    being re-requested forever by the store-defined daily refresh.
+
+    Refuses outright — moving nothing — if any destination row already exists, so
+    a genuine merge is never silently half-applied. All tables move in one
+    transaction.
+
+    Raises:
+        RepositoryError: on collision, on identical symbols, or on SQL failure.
+    """
+    if old_symbol == new_symbol:
+        raise RepositoryError("rename_symbol: old_symbol and new_symbol are identical")
+
+    moved: dict[str, int] = {}
+    try:
+        async with pool.acquire() as conn, conn.transaction():
+            for table, key_cols in _SYMBOL_KEYED_TABLES:
+                # Table/column names come from the hardcoded tuple above, never from
+                # caller input, so this interpolation carries no injection surface;
+                # the symbols themselves stay parameterized.
+                on_clause = " AND ".join(f"n.{col} = o.{col}" for col in key_cols)
+                collisions: int = await conn.fetchval(
+                    f"SELECT count(*) FROM market_data.{table} o "  # noqa: S608
+                    f"JOIN market_data.{table} n ON n.symbol = $2 AND {on_clause} "
+                    f"WHERE o.symbol = $1",
+                    old_symbol,
+                    new_symbol,
+                )
+                if collisions:
+                    raise RepositoryError(
+                        f"rename_symbol refused: {collisions} row(s) in "
+                        f"market_data.{table} already exist under {new_symbol!r} at the "
+                        f"same {'/'.join(key_cols)} as {old_symbol!r}. Resolve the overlap "
+                        "before renaming — this is a merge, not a ticker change."
+                    )
+            for table, _ in _SYMBOL_KEYED_TABLES:
+                status: str = await conn.execute(
+                    f"UPDATE market_data.{table} SET symbol = $2 WHERE symbol = $1",  # noqa: S608
+                    old_symbol,
+                    new_symbol,
+                )
+                moved[table] = int(status.rsplit(" ", 1)[-1])
+    except RepositoryError:
+        raise
+    except Exception as exc:
+        raise RepositoryError(f"rename_symbol failed: {exc}") from exc
+
+    logger.info(
+        "renamed %s -> %s: %s",
+        old_symbol,
+        new_symbol,
+        ", ".join(f"{t}={n}" for t, n in moved.items()),
+    )
+    return moved
