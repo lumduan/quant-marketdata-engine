@@ -82,6 +82,8 @@ uv run uvicorn src.quant_marketdata_engine.api.main:app --port 8000   # run the 
 # Owner-mode ingest (needs MARKETDATA_ENGINE_PUBLIC_MODE=false + TVKIT_AUTH_TOKEN):
 uv run python -m src.quant_marketdata_engine.ingest fetch --symbol SET:PTT --timeframe 1d --bars 5000
 uv run python -m src.quant_marketdata_engine.ingest backfill --dir ../strategies/csm-set/data/raw/dividends
+# The scheduled bulk refresh (every tracked symbol) — see docs/operations/scheduled-ingest.md:
+uv run python -m src.quant_marketdata_engine.ingest daily --timeframe 1d --bars 30
 ```
 
 Combined quality gate (must pass before every push, matching CI):
@@ -225,7 +227,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `f
 | [`docs/operations/configuration.md`](docs/operations/configuration.md) | All `MARKETDATA_ENGINE_*` env vars, public vs owner mode, reader flags |
 | [`docs/operations/troubleshooting.md`](docs/operations/troubleshooting.md) | Common issues: cookie expiry, DB/Redis down, gateway 502/503/504 |
 | `docs/operations/monitoring.md` (TODO: Phase 6.x) | Health checks, logging, alerting |
-| `docs/operations/scheduled-ingest.md` (TODO: Phase 6.x) | Cron/scheduler setup, idempotency guarantees |
+| [`docs/operations/scheduled-ingest.md`](docs/operations/scheduled-ingest.md) | The `daily` bulk refresh: cron setup, idempotency guarantees, freshness monitoring |
 
 ### docs/ — Data
 

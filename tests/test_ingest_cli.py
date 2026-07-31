@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from src.quant_marketdata_engine.ingest import cli
+from src.quant_marketdata_engine.ingest.daily import DailyIngestResult
 
 
 def test_parse_ts_variants() -> None:
@@ -65,6 +66,76 @@ async def test_run_backfill(monkeypatch: pytest.MonkeyPatch) -> None:
     args = argparse.Namespace(command="backfill", dir="/tmp/x", timeframe="1d", limit_files=None)
     n = await cli._run(args, Settings(_env_file=None))  # type: ignore[call-arg]
     assert n == 3
+
+
+async def test_run_daily_returns_rows_when_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_io(monkeypatch)
+    seen: dict[str, Any] = {}
+
+    async def _fake_daily(**kw: Any) -> Any:
+        seen.update(kw)
+        return DailyIngestResult(
+            timeframe="1d", attempted=3, succeeded=3, failed=0, rows_written=12
+        )
+
+    monkeypatch.setattr(cli, "run_daily_ingest", _fake_daily)
+    from src.quant_marketdata_engine.config.settings import Settings
+
+    args = argparse.Namespace(
+        command="daily",
+        timeframe="1d",
+        bars=30,
+        symbols="SET:A,SET:B",
+        symbols_file=None,
+        concurrency=4,
+        retries=2,
+        limit=None,
+        min_interval=0.0,
+    )
+    n = await cli._run(args, Settings(_env_file=None, public_mode=False))  # type: ignore[call-arg]
+    assert n == 12
+    assert seen["symbols"] == ["SET:A", "SET:B"]
+
+
+async def test_run_daily_signals_failure_with_negative(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run where every symbol failed must surface to cron as a non-zero exit."""
+    _patch_io(monkeypatch)
+
+    async def _fake_daily(**_kw: Any) -> Any:
+        return DailyIngestResult(timeframe="1d", attempted=2, succeeded=0, failed=2, rows_written=0)
+
+    monkeypatch.setattr(cli, "run_daily_ingest", _fake_daily)
+    from src.quant_marketdata_engine.config.settings import Settings
+
+    args = argparse.Namespace(
+        command="daily",
+        timeframe="1d",
+        bars=30,
+        symbols=None,
+        symbols_file=None,
+        concurrency=4,
+        retries=2,
+        limit=None,
+        min_interval=0.0,
+    )
+    n = await cli._run(args, Settings(_env_file=None, public_mode=False))  # type: ignore[call-arg]
+    assert n < 0
+
+
+def test_resolve_symbols_from_file(tmp_path: Any) -> None:
+    path = tmp_path / "syms.txt"
+    path.write_text("# a comment\nSET:AAA\n\n  SET:BBB  \n", encoding="utf-8")
+    args = argparse.Namespace(symbols=None, symbols_file=str(path))
+    assert cli._resolve_symbols(args) == ["SET:AAA", "SET:BBB"]
+
+
+def test_resolve_symbols_none_by_default() -> None:
+    assert cli._resolve_symbols(argparse.Namespace(symbols=None, symbols_file=None)) is None
+
+
+def test_daily_parser_defaults() -> None:
+    args = cli.build_parser().parse_args(["daily"])
+    assert args.command == "daily" and args.timeframe == "1d" and args.bars > 0
 
 
 def test_main_invokes_run(monkeypatch: pytest.MonkeyPatch) -> None:
