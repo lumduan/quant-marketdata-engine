@@ -35,9 +35,38 @@ from src.quant_marketdata_engine.ingest.service import ingest_ohlcv
 logger = logging.getLogger(__name__)
 
 DEFAULT_BARS = 30
-DEFAULT_CONCURRENCY = 4
+DEFAULT_CONCURRENCY = 2
 DEFAULT_RETRIES = 2
 RETRY_BACKOFF_SECONDS = 2.0
+
+# Every fetch opens a fresh tvkit client, and each client bootstraps its auth
+# token with an HTTP GET to tradingview.com. Measured on 2026-07-31: a 692-symbol
+# run at concurrency 4 sustained ~96 requests/min and TradingView began answering
+# that bootstrap with 403 after 449 fetches (4m41s in). Pacing the *rate* — rather
+# than only the concurrency — is what keeps a full-universe run under that ceiling,
+# because concurrency alone lets fast responses spike the request rate.
+DEFAULT_MIN_INTERVAL_SECONDS = 1.0
+
+
+class _Pacer:
+    """Serialises fetch starts so the request rate never exceeds 1/min_interval."""
+
+    def __init__(self, min_interval: float) -> None:
+        self._min_interval = min_interval
+        self._lock = asyncio.Lock()
+        self._next_at = 0.0
+
+    async def wait(self) -> None:
+        """Block until the next fetch is allowed to start."""
+        if self._min_interval <= 0:
+            return
+        async with self._lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            if now < self._next_at:
+                await asyncio.sleep(self._next_at - now)
+                now = loop.time()
+            self._next_at = now + self._min_interval
 
 
 class DailyIngestResult(BaseModel):
@@ -71,10 +100,12 @@ async def _ingest_one(
     bars: int,
     retries: int,
     semaphore: asyncio.Semaphore,
+    pacer: _Pacer,
 ) -> tuple[str, int | None]:
     """Ingest one symbol with retries. Returns ``(symbol, rows)``; rows is None on failure."""
     async with semaphore:
         for attempt in range(retries + 1):
+            await pacer.wait()
             try:
                 rows = await ingest_ohlcv(
                     settings=settings,
@@ -110,6 +141,7 @@ async def run_daily_ingest(
     concurrency: int = DEFAULT_CONCURRENCY,
     retries: int = DEFAULT_RETRIES,
     limit: int | None = None,
+    min_interval: float = DEFAULT_MIN_INTERVAL_SECONDS,
 ) -> DailyIngestResult:
     """Refresh a recent window for every tracked symbol at ``timeframe``.
 
@@ -123,6 +155,8 @@ async def run_daily_ingest(
         concurrency: Max simultaneous tvkit fetches.
         retries: Retries per symbol after the first attempt.
         limit: Optional cap on symbol count (smoke tests).
+        min_interval: Minimum seconds between fetch starts — the upstream rate
+            ceiling. ``0`` disables pacing.
 
     Returns:
         A :class:`DailyIngestResult` summary.
@@ -148,11 +182,12 @@ async def run_daily_ingest(
         resolved = resolved[:limit]
 
     logger.info(
-        "daily ingest starting timeframe=%s symbols=%d bars=%d concurrency=%d",
+        "daily ingest starting timeframe=%s symbols=%d bars=%d concurrency=%d min_interval=%.2fs",
         timeframe,
         len(resolved),
         bars,
         concurrency,
+        min_interval,
     )
     if not resolved:
         logger.error(
@@ -163,6 +198,7 @@ async def run_daily_ingest(
         )
 
     semaphore = asyncio.Semaphore(max(1, concurrency))
+    pacer = _Pacer(min_interval)
     outcomes = await asyncio.gather(
         *(
             _ingest_one(
@@ -174,6 +210,7 @@ async def run_daily_ingest(
                 bars=bars,
                 retries=retries,
                 semaphore=semaphore,
+                pacer=pacer,
             )
             for symbol in resolved
         )

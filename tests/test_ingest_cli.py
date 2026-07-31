@@ -90,6 +90,7 @@ async def test_run_daily_returns_rows_when_ok(monkeypatch: pytest.MonkeyPatch) -
         concurrency=4,
         retries=2,
         limit=None,
+        min_interval=0.0,
     )
     n = await cli._run(args, Settings(_env_file=None, public_mode=False))  # type: ignore[call-arg]
     assert n == 12
@@ -115,6 +116,7 @@ async def test_run_daily_signals_failure_with_negative(monkeypatch: pytest.Monke
         concurrency=4,
         retries=2,
         limit=None,
+        min_interval=0.0,
     )
     n = await cli._run(args, Settings(_env_file=None, public_mode=False))  # type: ignore[call-arg]
     assert n < 0

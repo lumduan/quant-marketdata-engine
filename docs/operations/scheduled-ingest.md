@@ -38,7 +38,8 @@ universe registration step.
 | `--bars` | `30` | Recent bar depth per symbol — the refresh window |
 | `--symbols` | — | Comma-separated override (`SET:PTT,SET:AOT`) |
 | `--symbols-file` | — | Newline-delimited file; `#` comments and blanks ignored |
-| `--concurrency` | `4` | Max simultaneous tvkit fetches |
+| `--concurrency` | `2` | Max simultaneous tvkit fetches |
+| `--min-interval` | `1.0` | Min seconds between fetch **starts** — the upstream rate ceiling (`0` disables) |
 | `--retries` | `2` | Retries per symbol after the first attempt |
 | `--limit` | — | Cap the symbol count (smoke tests) |
 
@@ -57,6 +58,32 @@ comparison and nothing else — `ingested_at` is DB-defaulted and does not churn
 
 For a larger gap, widen the window rather than inventing a backfill path:
 `--bars 90` covers roughly a quarter.
+
+### The TradingView rate ceiling — why pacing, not just concurrency
+
+Every fetch opens a fresh tvkit client, and each client bootstraps its auth token with an
+HTTP `GET https://www.tradingview.com/`. A full-universe run therefore issues one bootstrap
+**per symbol**, and that is what the upstream limits.
+
+Measured on **2026-07-31**, running all 692 symbols at `--concurrency 4` with no pacing:
+
+| | |
+|---|---|
+| Fetches completed before the first block | **449** |
+| Elapsed to the first block | **4 min 41 s** |
+| Sustained rate | **~96 requests/min** |
+| Failure mode | `GET https://www.tradingview.com/ → 403 Forbidden`, for every subsequent symbol |
+
+Concurrency alone does not bound this: with a semaphore of N, fast responses simply let the
+request rate spike. `--min-interval` bounds the **rate** directly by spacing fetch *starts*,
+which is the quantity the upstream actually meters. The default (`1.0 s`, i.e. ~60 req/min)
+sits comfortably under the observed ~96 req/min ceiling and puts a 692-symbol run at roughly
+12 minutes.
+
+If a run does get blocked, it fails cleanly — every remaining symbol records a per-symbol
+failure, and the run exits non-zero only if *nothing* succeeded. Wait for the window to clear
+(tens of minutes) rather than immediately retrying, then re-run: the upsert is idempotent, so
+the symbols that already landed cost nothing the second time.
 
 ## Guarantees
 
@@ -88,21 +115,30 @@ Inspect the `daily ingest failed symbols (N): …` warning line for the list.
 
 ## Scheduling
 
-Installed as a host cron entry (`/etc/cron.d/quant-marketdata-ingest`), run **after** the SET
-close and after `csm-set`'s own 18:00 BKK refresh so the two do not contend for TradingView:
+Installed in the **`batt` user crontab** (tagged `# MD_INGEST`), run **after** the SET close
+and after `csm-set`'s own 18:00 BKK refresh so the two do not contend for TradingView:
 
 ```cron
-# Market Data Engine — nightly canonical OHLCV refresh (19:15 BKK = 12:15 UTC, Mon–Fri)
-15 12 * * 1-5 batt cd /home/batt/docker/quant-trading-system/quant-marketdata-engine && \
-  docker compose -f docker-compose.yml -f docker-compose.private.yml run --rm --no-deps \
-  marketdata-engine python -m src.quant_marketdata_engine.ingest daily --timeframe 1d --bars 30 \
-  >> /home/batt/.config/quant-pm/marketdata-ingest.log 2>&1
+15 12 * * 1-5 cd /home/batt/docker/quant-trading-system/quant-marketdata-engine && /usr/bin/docker compose -f docker-compose.yml -f docker-compose.private.yml run --rm --no-deps marketdata-engine python -m src.quant_marketdata_engine.ingest daily --timeframe 1d --bars 30 --concurrency 2 --min-interval 1.0 >> /home/batt/.config/quant-pm/marketdata-ingest.log 2>&1 # MD_INGEST
 ```
 
-**Cron runs in UTC on this host** — `12:15 UTC` is `19:15 Asia/Bangkok`. Getting this
-backwards is the single most common scheduling mistake in this platform.
+The user crontab rather than `/etc/cron.d` because it needs no root, and `batt` is already in
+the `docker` group. Find it with `crontab -l | grep MD_INGEST`.
 
-At ~692 symbols and `--concurrency 4` a full run takes roughly 15–20 minutes.
+**Cron runs in UTC on this host** (`Etc/UTC`) — `12:15 UTC` is `19:15 Asia/Bangkok`. Getting
+this backwards is the single most common scheduling mistake in this platform.
+
+**The `cd` is load-bearing.** Cron runs from `$HOME`, where `-f docker-compose.yml` resolves
+to `/home/batt/docker-compose.yml` and fails with `no such file or directory`. Validate any
+change to this line under a cron-like environment before trusting it:
+
+```bash
+cd /home/batt && env -i HOME=/home/batt PATH=/usr/bin:/bin /bin/sh -c \
+  'cd /home/batt/docker/quant-trading-system/quant-marketdata-engine && \
+   /usr/bin/docker compose -f docker-compose.yml -f docker-compose.private.yml config --services'
+```
+
+At ~692 symbols with the default pacing a full run takes roughly **12 minutes**.
 
 Weekends are skipped (`1-5`); SET holidays are **not** — the engine holds no market calendar,
 so a holiday run simply re-fetches unchanged bars and upserts nothing new. That is harmless
@@ -131,6 +167,7 @@ check `/home/batt/.config/quant-pm/marketdata-ingest.log` first, then the cookie
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Every symbol fails, exit `1` | tvkit cookie expired | Refresh `TVKIT_AUTH_TOKEN` in the gitignored `.env` — see [`configuration.md`](configuration.md) |
+| Symbols succeed then all fail with `403` | Upstream rate limit tripped | Lower the rate (raise `--min-interval`); wait for the window to clear before re-running |
 | `IngestDisabledError` immediately | Private overlay not layered | Include `-f docker-compose.private.yml` |
 | `CookieConfigError` immediately | `.env` missing or cookie malformed | Cookie is a JSON string with a `sessionid` key, not a JWT |
 | Exit `1` with `resolved 0 symbols` | Empty store or bad `--symbols-file` | Seed with `fetch`, or check the file path |

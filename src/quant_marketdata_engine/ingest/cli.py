@@ -29,6 +29,7 @@ from src.quant_marketdata_engine.ingest.backfill import backfill_from_dir
 from src.quant_marketdata_engine.ingest.daily import (
     DEFAULT_BARS,
     DEFAULT_CONCURRENCY,
+    DEFAULT_MIN_INTERVAL_SECONDS,
     DEFAULT_RETRIES,
     run_daily_ingest,
 )
@@ -71,6 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
     daily.add_argument("--symbols-file", default=None, help="Newline-delimited symbol file.")
     daily.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY)
     daily.add_argument("--retries", type=int, default=DEFAULT_RETRIES)
+    daily.add_argument(
+        "--min-interval",
+        type=float,
+        default=DEFAULT_MIN_INTERVAL_SECONDS,
+        help="Min seconds between fetch starts (upstream rate ceiling; 0 disables).",
+    )
     daily.add_argument("--limit", type=int, default=None, help="Cap symbol count (smoke tests).")
     return parser
 
@@ -116,6 +123,7 @@ async def _run(args: argparse.Namespace, settings: Settings) -> int:
                 concurrency=args.concurrency,
                 retries=args.retries,
                 limit=args.limit,
+                min_interval=args.min_interval,
             )
             # ``__main__`` maps a negative return to exit 1, so a run that
             # resolved no symbols or lost every symbol surfaces to cron as a

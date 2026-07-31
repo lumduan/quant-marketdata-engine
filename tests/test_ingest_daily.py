@@ -54,6 +54,7 @@ async def test_public_mode_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
             settings=Settings(_env_file=None, public_mode=True),  # type: ignore[call-arg]
             pool=object(),  # type: ignore[arg-type]
             redis=None,
+            min_interval=0.0,
             symbols=["SET:PTT"],
         )
     assert not called, "public mode must be rejected before any fetch"
@@ -65,6 +66,7 @@ async def test_missing_cookie_fails_fast() -> None:
             settings=Settings(_env_file=None, public_mode=False),  # type: ignore[call-arg]
             pool=object(),  # type: ignore[arg-type]
             redis=None,
+            min_interval=0.0,
             symbols=["SET:PTT"],
         )
 
@@ -82,6 +84,7 @@ async def test_happy_path_sums_rows(monkeypatch: pytest.MonkeyPatch) -> None:
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
         symbols=["SET:A", "SET:B"],
         bars=30,
     )
@@ -102,6 +105,7 @@ async def test_per_symbol_failure_is_isolated(monkeypatch: pytest.MonkeyPatch) -
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
         symbols=["SET:GOOD", "SET:BAD"],
         retries=1,
     )
@@ -120,6 +124,7 @@ async def test_repository_failure_is_isolated(monkeypatch: pytest.MonkeyPatch) -
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
         symbols=["SET:A"],
         retries=0,
     )
@@ -142,6 +147,7 @@ async def test_retry_then_succeed(monkeypatch: pytest.MonkeyPatch) -> None:
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
         symbols=["SET:FLAKY"],
         retries=2,
     )
@@ -163,6 +169,7 @@ async def test_symbols_default_to_store_and_limit_applies(monkeypatch: pytest.Mo
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
         limit=2,
     )
     assert result.attempted == 2
@@ -177,6 +184,7 @@ async def test_empty_symbol_set_is_not_ok(monkeypatch: pytest.MonkeyPatch) -> No
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
     )
     assert result.attempted == 0 and not result.ok
 
@@ -202,7 +210,53 @@ async def test_concurrency_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
         settings=_owner_settings(),
         pool=object(),  # type: ignore[arg-type]
         redis=None,
+        min_interval=0.0,
         symbols=[f"SET:S{i}" for i in range(20)],
         concurrency=3,
     )
     assert peak <= 3, f"semaphore breached: peak={peak}"
+
+
+async def test_pacer_enforces_minimum_interval() -> None:
+    """The rate ceiling is what keeps a full-universe run under TradingView's limit."""
+    import asyncio
+
+    pacer = daily._Pacer(0.05)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    await asyncio.gather(*(pacer.wait() for _ in range(4)))
+    elapsed = loop.time() - started
+    # 4 paced starts => at least 3 intervals of spacing.
+    assert elapsed >= 0.15 - 0.01, f"pacer did not space starts: {elapsed:.3f}s"
+
+
+async def test_pacer_disabled_is_a_noop() -> None:
+    import asyncio
+
+    pacer = daily._Pacer(0.0)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    await asyncio.gather(*(pacer.wait() for _ in range(50)))
+    assert loop.time() - started < 0.05
+
+
+async def test_daily_paces_fetch_starts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """min_interval must throttle the real ingest loop, not just the helper."""
+    import asyncio
+
+    async def _fake(**_kw: Any) -> int:
+        return 1
+
+    monkeypatch.setattr(daily, "ingest_ohlcv", _fake)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    result = await run_daily_ingest(
+        settings=_owner_settings(),
+        pool=object(),  # type: ignore[arg-type]
+        redis=None,
+        symbols=[f"SET:S{i}" for i in range(4)],
+        concurrency=4,
+        min_interval=0.05,
+    )
+    assert result.succeeded == 4
+    assert loop.time() - started >= 0.15 - 0.01
