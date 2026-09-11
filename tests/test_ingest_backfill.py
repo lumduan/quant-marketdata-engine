@@ -58,7 +58,14 @@ async def test_backfill_imports_valid_rows(tmp_path: Path, monkeypatch: pytest.M
     assert total == 2  # 3 of 5 rows skipped (nonpositive / missing-dt / NaN)
     assert {b.symbol for b in captured} == {"SET:PTT"}
     assert all(b.source == "csm-backfill-div" for b in captured)
+    # 🔑 DELIBERATELY NOT NORMALISED, and this assertion is the guard.
     # tz-aware Asia/Bangkok bar-open converted to UTC (09:00 BKK → 02:00 UTC).
+    # The tvkit path floors daily bars to midnight UTC (ingest/session_ts.py);
+    # this path must NOT, or seeded dividend-adjusted rows would share a primary
+    # key with raw tvkit rows and the upsert would silently resolve a price
+    # disagreement — 51 of 20,000 sampled overlapping symbol-days differ — while
+    # `source = EXCLUDED.source` relabelled the provenance. Operator decision,
+    # 2026-09-11. Do not "fix" this to match the tvkit path.
     assert captured[0].ts.hour == 2
 
 

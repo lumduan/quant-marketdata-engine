@@ -5,12 +5,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+import asyncpg
 import pytest
 from fastapi.testclient import TestClient
 from src.quant_marketdata_engine.api import deps, routes
 from src.quant_marketdata_engine.api.main import create_app
 from src.quant_marketdata_engine.cache import ohlcv_cache
 from src.quant_marketdata_engine.config.settings import Settings
+from src.quant_marketdata_engine.db import postgres
 from src.quant_marketdata_engine.db.models import OHLCVBarRow
 from src.quant_marketdata_engine.ingest.errors import IngestDisabledError, TvkitFetchError
 
@@ -49,7 +51,10 @@ def test_health_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _redis_ok(_client: Any) -> bool:
         return True
 
-    monkeypatch.setattr(routes, "get_pool", lambda: FakePool(FakeConn()))
+    async def _ensure_ok(*_a: Any, **_k: Any) -> FakePool:
+        return FakePool(FakeConn())
+
+    monkeypatch.setattr(routes, "ensure_pool", _ensure_ok)
     monkeypatch.setattr(routes, "pg_ping", _pg_ok)
     monkeypatch.setattr(routes, "get_redis", lambda: FakeRedis())
     monkeypatch.setattr(routes, "redis_ping", _redis_ok)
@@ -144,14 +149,38 @@ def test_auth_passes_with_correct_key() -> None:
 # ---- DB unavailable -----------------------------------------------------
 
 
-def test_get_pool_dep_maps_uninitialized_to_503() -> None:
-    import pytest as _pytest
+async def test_get_pool_dep_maps_unreachable_db_to_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreachable database is a clean 503, not a bare 500."""
     from fastapi import HTTPException
 
+    async def _boom(**_: Any) -> None:
+        raise OSError("no db")
+
+    monkeypatch.setattr(asyncpg, "create_pool", _boom)
     # conftest resets the module pool to None before each test.
-    with _pytest.raises(HTTPException) as exc:
-        deps.get_pool_dep()
+    with pytest.raises(HTTPException) as exc:
+        await deps.get_pool_dep(settings=_settings())
     assert exc.value.status_code == 503
+
+
+async def test_get_pool_dep_recovers_without_a_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """🔴 The 2026-09-10 boot race, at the dependency boundary.
+
+    Startup never opened the pool. The dependency must open it on the next
+    request rather than returning 503 for the life of the process.
+    """
+    fake = FakePool(FakeConn())
+
+    async def _create_pool(**_: Any) -> FakePool:
+        return fake
+
+    monkeypatch.setattr(asyncpg, "create_pool", _create_pool)
+    assert postgres._pool is None
+    assert await deps.get_pool_dep(settings=_settings()) is fake
 
 
 # ---- /universe ----------------------------------------------------------

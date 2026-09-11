@@ -12,7 +12,17 @@ The process is up but TimescaleDB is unreachable.
 - Confirm `MARKETDATA_ENGINE_PG_DSN` points at the right host — inside `quant-network` use
   `quant-postgres:5432`, not `localhost`.
 - While `db: false`, read endpoints return **`503` "database unavailable"**
-  (`get_pool_dep` surfaces the uninitialized pool cleanly).
+  (`get_pool_dep` surfaces the unreachable pool cleanly).
+- ⚠️ **`db: false` does not always mean the database is down.** On 2026-09-10 the host
+  rebooted, this container started **0.324 s before** `quant-postgres`, the startup pool
+  creation failed, and nothing retried — so the engine served `503` for 33 h against a
+  database that was healthy throughout, while Docker reported the container `healthy`.
+  **Check the database directly before believing this endpoint**, e.g.
+  `docker exec quant-marketdata-engine python -c "import asyncio,asyncpg,os;
+  asyncio.run(asyncpg.connect(os.environ['MARKETDATA_ENGINE_PG_DSN']))"`.
+  Since 2026-09-11 the pool re-opens on the next request (`db.postgres.ensure_pool`), so this
+  state should now clear itself within one request of the database becoming reachable. If it
+  does not, the database really is unreachable.
 
 ## `/health` shows `redis: false`
 

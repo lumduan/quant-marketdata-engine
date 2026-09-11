@@ -16,7 +16,7 @@ from fastapi import Depends, Header, HTTPException, status
 from src.quant_marketdata_engine.cache.redis_client import get_redis
 from src.quant_marketdata_engine.config.settings import Settings, get_settings
 from src.quant_marketdata_engine.db.errors import PoolNotInitializedError
-from src.quant_marketdata_engine.db.postgres import get_pool
+from src.quant_marketdata_engine.db.postgres import ensure_pool
 from src.quant_marketdata_engine.settlement.service import SettlementService
 from src.quant_marketdata_engine.underlying_price.service import UnderlyingPriceService
 
@@ -44,14 +44,21 @@ def get_underlying_price_service(
     )
 
 
-def get_pool_dep() -> asyncpg.Pool:
-    """Return the initialized asyncpg pool, or 503 if the DB is unavailable.
+async def get_pool_dep(
+    settings: Settings = Depends(get_settings_dep),
+) -> asyncpg.Pool:
+    """Return the asyncpg pool, opening it on demand, or 503 if unreachable.
 
-    The pool is uninitialized when startup could not reach Postgres; surface a
-    clean ``503`` rather than letting the dependency error become a bare ``500``.
+    Goes through :func:`ensure_pool` rather than :func:`get_pool` so a startup
+    that lost the race against Postgres heals on the next request. Using the
+    pure getter here is what made the 2026-09-10 boot race permanent.
     """
     try:
-        return get_pool()
+        return await ensure_pool(
+            settings.pg_dsn,
+            min_size=settings.pg_pool_min_size,
+            max_size=settings.pg_pool_max_size,
+        )
     except PoolNotInitializedError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

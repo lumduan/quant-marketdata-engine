@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -67,3 +67,40 @@ async def test_fetch_error_wrapped_without_cookie(monkeypatch: pytest.MonkeyPatc
         )
     # The error wraps context but the cookie dict itself is never formatted in.
     assert "SET:PTT" in str(exc.value)
+
+
+async def test_daily_bars_are_keyed_by_session_not_by_the_vendor_stamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two fetches of one session at different vendor stamps map to one key.
+
+    TradingView moved the SET daily stamp from 09:55 to 09:00 Bangkok around
+    2026-09-08 and the 30-bar refetch then duplicated its whole window. Both
+    stamps must now produce the same ``ts``, so the upsert updates in place.
+    """
+    bkk = timezone(timedelta(hours=7))
+    old_stamp = datetime(2026, 9, 4, 9, 55, tzinfo=bkk).timestamp()
+    new_stamp = datetime(2026, 9, 4, 9, 0, tzinfo=bkk).timestamp()
+    assert old_stamp != new_stamp
+
+    seen: list[datetime] = []
+    for epoch in (old_stamp, new_stamp):
+        fake = _make_fake_ohlcv([_FakeBar(epoch, 10.0, 11.0, 9.0, 10.5, 1000.0)])
+        monkeypatch.setattr(tvkit_client, "OHLCV", fake)
+        rows = await tvkit_client.fetch_ohlcv(
+            symbol="SET:PTT", timeframe="1d", cookies={"sessionid": "x"}, bars_count=1
+        )
+        seen.append(rows[0].ts)
+
+    assert seen[0] == seen[1] == datetime(2026, 9, 4, tzinfo=UTC)
+
+
+async def test_intraday_bars_keep_their_vendor_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only 1d is floored — flooring 5m would collapse a session onto one key."""
+    epoch = datetime(2026, 9, 4, 6, 45, tzinfo=UTC).timestamp()
+    fake = _make_fake_ohlcv([_FakeBar(epoch, 10.0, 11.0, 9.0, 10.5, 1000.0)])
+    monkeypatch.setattr(tvkit_client, "OHLCV", fake)
+    rows = await tvkit_client.fetch_ohlcv(
+        symbol="SET:PTT", timeframe="5m", cookies={"sessionid": "x"}, bars_count=1
+    )
+    assert rows[0].ts == datetime(2026, 9, 4, 6, 45, tzinfo=UTC)
