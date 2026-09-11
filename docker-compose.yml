@@ -20,12 +20,24 @@ services:
     depends_on:
       marketdata-redis:
         condition: service_healthy
+    # 🔴 The healthcheck asserts the BODY, not just the status code.
+    #
+    # /health deliberately returns 200 while degraded, so a probe can tell
+    # "process up, dependency down" from "process down" (docs/api/health.md).
+    # Checking only the status therefore reported `healthy` for 33 h on
+    # 2026-09-10/11 while every /ohlcv request returned 503 — the container was
+    # the last place that could have said otherwise, and it said nothing.
+    #
+    # ⚠️ This makes the fault VISIBLE; it does not self-heal. Docker's `restart:`
+    # policy does not act on health status — only a `depends_on:
+    # condition: service_healthy` and human/monitor eyes do. The recovery is
+    # in-process: db/postgres.py::ensure_pool re-opens the pool on demand.
     healthcheck:
       test:
         - "CMD"
         - "python"
         - "-c"
-        - "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"
+        - "import json,urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health'); sys.exit(0 if r.status==200 and json.load(r).get('db') is True else 1)"
       interval: 30s
       timeout: 10s
       retries: 3

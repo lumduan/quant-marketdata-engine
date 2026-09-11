@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from src.quant_marketdata_engine.api import routes as routes_mod
 from src.quant_marketdata_engine.cache import redis_client
 from src.quant_marketdata_engine.config import settings as settings_mod
 from src.quant_marketdata_engine.db import postgres
@@ -14,9 +15,13 @@ from src.quant_marketdata_engine.db import postgres
 def _reset_singletons() -> Iterator[None]:
     """Clear module-global pool/redis/settings caches around each test."""
     postgres._pool = None
+    postgres._last_attempt = None
+    routes_mod._last_db_ok = None
     redis_client._client = None
     settings_mod.get_settings.cache_clear()
     yield
     postgres._pool = None
+    postgres._last_attempt = None
+    routes_mod._last_db_ok = None
     redis_client._client = None
     settings_mod.get_settings.cache_clear()

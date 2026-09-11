@@ -43,5 +43,11 @@ curl http://quant-api-gateway:8000/api/v2/engines/market-data/health
 - `status` is `"degraded"` (not an error code) when the DB is unreachable — the endpoint
   still returns `200` so the probe can distinguish "process up, dependency down" from "process
   down". See [`../operations/troubleshooting.md`](../operations/troubleshooting.md).
+- 🔴 **A probe must therefore read the BODY, not the status code.** The container healthcheck
+  asserted only `status == 200` until 2026-09-11, and consequently reported `healthy` for 33 h
+  while every `/ohlcv` request returned `503`. It now requires `db == true`. Any external
+  monitor of this endpoint must do the same, or it is grading liveness, not readiness.
+- `db` reflects the **serving** pool — the same pool the read routes use — and probing it also
+  re-opens a pool that a failed startup left closed.
 - In public mode `cookie_present` is normally `false` (no cookie is mounted); in owner mode it
   is `true`.

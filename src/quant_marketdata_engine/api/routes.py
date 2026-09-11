@@ -39,8 +39,9 @@ from src.quant_marketdata_engine.cache import ohlcv_cache
 from src.quant_marketdata_engine.cache.redis_client import get_redis
 from src.quant_marketdata_engine.cache.redis_client import ping as redis_ping
 from src.quant_marketdata_engine.config.settings import Settings
+from src.quant_marketdata_engine.db.errors import PoolNotInitializedError
 from src.quant_marketdata_engine.db.models import OHLCVBarRow
-from src.quant_marketdata_engine.db.postgres import get_pool
+from src.quant_marketdata_engine.db.postgres import ensure_pool
 from src.quant_marketdata_engine.db.postgres import ping as pg_ping
 from src.quant_marketdata_engine.db.repositories import (
     fetch_ohlcv,
@@ -81,14 +82,49 @@ def _validate_range(start: datetime | None, end: datetime | None) -> None:
         )
 
 
+# Health logs the DB state on TRANSITION only. Logging every probe produced
+# 22,220 stack traces in a single 100k-line window on 2026-09-11, which buries
+# the one line that matters -- and a traceback per healthcheck is a sample of a
+# standing state, not an event.
+_last_db_ok: bool | None = None
+
+
+async def _probe_db(settings: Settings) -> bool:
+    """Return whether the SERVING pool can round-trip a query right now.
+
+    Goes through :func:`ensure_pool`, so a health probe also heals a pool that a
+    lost startup race left unopened. It must reflect the pool the read routes
+    actually use -- opening a throwaway connection here would report ``ok``
+    while every ``/ohlcv`` request still returned 503.
+    """
+    global _last_db_ok
+    ok = False
+    reason = ""
+    try:
+        ok = await pg_ping(
+            await ensure_pool(
+                settings.pg_dsn,
+                min_size=settings.pg_pool_min_size,
+                max_size=settings.pg_pool_max_size,
+            )
+        )
+    except PoolNotInitializedError as exc:
+        reason = str(exc)
+    except Exception as exc:  # noqa: BLE001 - health must never raise
+        reason = f"unexpected: {exc}"
+    if ok != _last_db_ok:
+        if ok:
+            logger.info("health: postgres reachable")
+        else:
+            logger.warning("health: postgres unavailable (%s)", reason or "ping returned false")
+        _last_db_ok = ok
+    return ok
+
+
 @router.get("/health", response_model=HealthResponse, summary="Engine readiness")
 async def health(settings: Settings = Depends(get_settings_dep)) -> HealthResponse:
     """Report DB + Redis reachability and tvkit-cookie presence (never the value)."""
-    db_ok = False
-    try:
-        db_ok = await pg_ping(get_pool())
-    except Exception:
-        logger.warning("health: postgres pool unavailable", exc_info=True)
+    db_ok = await _probe_db(settings)
     redis_ok = False
     client = get_redis()
     if client is not None:

@@ -8,6 +8,11 @@ The lifespan eagerly opens the asyncpg pool and the own-Redis client and closes
 them on shutdown. Startup is resilient: if a dependency is unreachable the app
 still starts and ``/health`` reports ``degraded`` (so orchestrators get a signal
 rather than a crash loop).
+
+⚠️ Resilient startup is only half the contract, and shipping the half was a
+33-hour outage. A swallowed failure must also be RECOVERABLE: every request path
+goes through ``db.postgres.ensure_pool``, which re-opens the pool on demand. See
+that module's docstring for the 2026-09-10 boot race this pairing exists to stop.
 """
 
 from __future__ import annotations
@@ -44,7 +49,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             max_size=settings.pg_pool_max_size,
         )
     except Exception:
-        logger.warning("startup: postgres pool unavailable; /health will report degraded")
+        # exc_info matters: without it the original connect error never reaches
+        # the log, and a lost startup race against Postgres is indistinguishable
+        # from a bad DSN. ensure_pool() will retry on the first request.
+        logger.warning(
+            "startup: postgres pool unavailable; /health will report degraded "
+            "until a request re-opens it",
+            exc_info=True,
+        )
     create_redis(settings.redis_url)
     try:
         yield

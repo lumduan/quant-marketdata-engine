@@ -20,6 +20,7 @@ from tvkit.api.chart.ohlcv import OHLCV
 
 from src.quant_marketdata_engine.db.models import OHLCVBarRow
 from src.quant_marketdata_engine.ingest.errors import TvkitFetchError
+from src.quant_marketdata_engine.ingest.session_ts import canonical_ts
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,10 @@ def _to_decimal(value: object) -> Decimal:
 
 def _bar_from_tvkit(raw: object, *, symbol: str, timeframe: str) -> OHLCVBarRow:
     """Map a tvkit ``OHLCVBar`` to our :class:`OHLCVBarRow` (UTC, Decimal)."""
-    ts = datetime.fromtimestamp(float(raw.timestamp), tz=UTC)  # type: ignore[attr-defined]
+    raw_ts = datetime.fromtimestamp(float(raw.timestamp), tz=UTC)  # type: ignore[attr-defined]
+    # Daily bars are stored at their session date, not the vendor's stamp:
+    # TradingView moves that stamp and the stamp is part of the primary key.
+    ts = canonical_ts(raw_ts, timeframe)
     return OHLCVBarRow(
         symbol=symbol,
         timeframe=timeframe,
