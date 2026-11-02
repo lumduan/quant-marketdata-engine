@@ -69,53 +69,10 @@ jobs:
           done
           exit 1
 
-      # 🔴 THE IGNORE BELOW IS TIME-BOXED, AND THE BOX IS ENFORCED HERE RATHER THAN DESCRIBED.
-      #
-      # Operator ruling 2026-11-02: ignore this ONE advisory id, with a deadline. Before that the
-      # ignore carried only the sentence "Revisit when diskcache ships a fix" — a condition with
-      # no date and nothing that would ever fire. That is the same failure shape as the TK-0220
-      # re-compaction floor, which outlived its purpose by 68 days and held an armed prune at zero
-      # bytes because the hold was written down and never enforced. A comment is not a time box.
-      #
-      # ⇒ after DISKCACHE_IGNORE_EXPIRY this job FAILS, loudly, and the decision must be re-made.
-      #   Extending it means editing this date in a reviewed PR, which is the point.
-      - name: diskcache ignore has not expired
-        env:
-          DISKCACHE_IGNORE_EXPIRY: "2027-01-31"
-        run: |
-          TODAY=$(date -u +%F)
-          if [ "$TODAY" \> "$DISKCACHE_IGNORE_EXPIRY" ]; then
-            echo "::error title=The CVE-2025-69872 ignore EXPIRED on $DISKCACHE_IGNORE_EXPIRY::\
-          Today is $TODAY. Do NOT extend this silently. Re-decide: has diskcache shipped a fix \
-          (it was dormant since 2023-08-31), can settfex drop it, or is the bounded exposure still \
-          acceptable? Then move the date in a reviewed PR."
-            exit 1
-          fi
-          echo "diskcache ignore valid until $DISKCACHE_IGNORE_EXPIRY (today $TODAY)"
-
       - name: Run pip-audit
         id: audit
-        # CVE-2025-69872 / PYSEC-2026-2447 / GHSA-w8v5-vhqr-4h9v (diskcache 5.6.3).
-        #
-        # WHY IGNORED, and every clause here was measured on 2026-11-02 rather than assumed:
-        #   * NO UPSTREAM FIX EXISTS. The advisory's Fix Versions field is empty, `uv lock
-        #     --upgrade-package diskcache` does not move it, and diskcache's last release was
-        #     2023-08-31 — upstream is dormant, so "wait for a fix" has no expected date.
-        #   * It is a RUNTIME dep, not dev: `diskcache <- settfex <- quant-marketdata-engine`.
-        #   * THE EXPOSURE IS BOUNDED BY A PRECONDITION WE CONTROL. The CVE is pickle
-        #     deserialization needing "write access to the cache directory". settfex's cache
-        #     defaults to Path.home()/".settfex"/"cache" INSIDE the container, and
-        #     `docker inspect quant-marketdata-engine` reports 0 MOUNTS — no bind mount or volume
-        #     reaches it. So an attacker must already have code execution in that container. This
-        #     is post-compromise persistence, not a remote-code-execution path.
-        #   * ⚠️ IT IS THE SET SESSION-COOKIE STORE (settfex/utils/session_cache.py). That is not
-        #     a reason to ignore it — it is the reason to keep the box short.
-        #
-        # ⛔ ONE ID ONLY. Never widen this to a blanket ignore or a package-level skip: the
-        # operator's standing rule forbids turning CI green that way, and a filter is an allowlist
-        # of the things somebody thought of, so every NEW advisory would pass by default.
         env:
-          AUDIT: uv run pip-audit --ignore-vuln CVE-2025-69872
+          AUDIT: uv run pip-audit
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
           SIMULATE_UNREACHABLE: ${{ inputs.simulate_unreachable_index }}
           UV_NO_SYNC: "1"
@@ -160,7 +117,34 @@ jobs:
               for v in x.get("vulns", []):
                   print(x["name"], x["version"], v["id"], "fix:", ", ".join(v.get("fix_versions", [])) or "none published")'
           if [ "$n" -gt 0 ]; then
-            out result found; echo "::error title=pip-audit found $n known vulnerabilities::listed above"; exit 1
+            # 🔴 THIS JOB IS EXPECTED TO BE RED, AND THAT IS THE HAZARD THIS BLOCK ANSWERS.
+            # Operator ruling 2026-11-02 (option A): diskcache / CVE-2025-69872 has NO upstream
+            # fix, so it is NOT ignored and this job stays red with the reason recorded.
+            # ⚠️ A job that is always red cannot signal anything by its COLOUR — a new advisory
+            # lands in a workflow that was already failing and changes nothing a human sees.
+            # session:cash-carry raised exactly this: "while the job is red, a NEW advisory does
+            # not change its colour, so read the printed finding list." So the colour is not the
+            # signal; the TITLE is, and it separates accepted-only from something new.
+            u=$(python3 -c 'import json
+          d = json.load(open("audit.json"))
+          ACCEPTED = {"CVE-2025-69872", "PYSEC-2026-2447", "GHSA-w8v5-vhqr-4h9v"}
+          c = 0
+          for x in d["dependencies"]:
+              for v in x.get("vulns", []):
+                  ids = {v.get("id", "")} | set(v.get("aliases", []))
+                  if not (ids & ACCEPTED):
+                      c += 1
+          print(c)' 2>/dev/null || echo "?")
+            if [ "$u" = "0" ]; then
+              out result found
+              out reason "red for the ACCEPTED diskcache advisory only ($n row(s)); nothing new"
+              echo "::error title=EXPECTED RED - diskcache only ($n row(s)), no new advisory::Red by operator ruling 2026-11-02 option A. diskcache/CVE-2025-69872 has no upstream fix. Nothing NEW appeared."
+              exit 1
+            fi
+            out result found
+            out reason "$u finding(s) BEYOND the accepted diskcache advisory"
+            echo "::error title=$u NEW advisory finding(s) beyond the accepted diskcache one::Do not dismiss this as the usual red. $n total rows, $u NOT the accepted diskcache advisory. Read the list above."
+            exit 1
           fi
           if [ "$rc" -ne 0 ]; then
             out result could-not-run; out reason "pip-audit exited $rc but its report lists no vulnerability"; exit 0
