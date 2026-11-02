@@ -610,15 +610,6 @@ wheels = [
 ]
 
 [[package]]
-name = "diskcache"
-version = "5.6.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
-]
-
-[[package]]
 name = "distlib"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2227,17 +2218,16 @@ wheels = [
 
 [[package]]
 name = "settfex"
-version = "0.3.0"
+version = "0.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "curl-cffi" },
-    { name = "diskcache" },
     { name = "loguru" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9b/83/e3e3c15addb0cd9f90b19e04f795f5d5eba7d7152faef138e1e15f3ef4de/settfex-0.3.0.tar.gz", hash = "sha256:d77c10302617a2a438efe09e74b8a8d5513a6070a9edac56f5a236aec5ae89b7", size = 508966, upload-time = "2026-06-17T14:32:23.884Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/82/0c/93f1e0bc0c42e7bbcce6f58b80c6ef2e2a7b9b46a16d1856f46c5c32e900/settfex-0.3.1.tar.gz", hash = "sha256:b18d0b16c2839ba4d7d5c244409fc40da08e6a8ef1ad91c5c17fac8cb00c7970", size = 514568, upload-time = "2026-11-02T09:44:43.553Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/1a/b3e04be3774249bab578441aee01dad11c5b1039dee227fb71980924879b/settfex-0.3.0-py3-none-any.whl", hash = "sha256:8a5007014bc0fe8fd2c01f6366cb7fd16aca5924d50d95ec5edd567a171bb042", size = 79650, upload-time = "2026-06-17T14:32:22.574Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/1c/f76800691b0c34fcf243eb75a3625404fda1070d1b664d78ad5cad44a490/settfex-0.3.1-py3-none-any.whl", hash = "sha256:8d703c438286c252a3df12840d969313d6b97f603770585acfed5afe7f89b434", size = 82312, upload-time = "2026-11-02T09:44:42.041Z" },
 ]
 
 [[package]]
