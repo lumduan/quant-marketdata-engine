@@ -13,6 +13,10 @@ miss or error logs a warning and behaves as a miss, so a live fetch still serves
 when Redis is down. Every ``settfex`` failure is wrapped in
 :class:`UnderlyingPriceFetchError`, carrying the upstream HTTP status when one is
 known so the API layer can map 404 vs 502/503.
+Measured against settfex 0.27.0 on 2026-11-14: an unknown series raises
+``settfex.exceptions.SeriesNotFoundError`` with ``status_code=404``; the service
+test drives that same exception type, so this sentence fails with the test if it
+stops being true.
 """
 
 from __future__ import annotations
@@ -22,7 +26,6 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-import httpx
 import redis.asyncio as aioredis
 
 from src.quant_marketdata_engine.cache.single_flight import single_flight
@@ -101,20 +104,30 @@ class UnderlyingPriceService:
         """Fetch a fresh underlying-price quote from TFEX via ``settfex`` (no cache).
 
         Raises:
-            UnderlyingPriceFetchError: on any ``settfex``/transport failure. An
-                HTTP status (e.g. 404 for an unknown series) is carried on the error.
+            UnderlyingPriceFetchError: on any ``settfex``/transport failure.
+                ``status_code`` carries settfex's own ``FetchError.status_code``
+                (404 for an unknown series, verified live against 0.27.0), and is
+                ``None`` for a transport/parse failure that never reached HTTP.
         """
         # Import lazily so the heavy settfex import is paid only on a cold fetch
         # and the rest of the engine starts without it.
+        from settfex import exceptions as settfex_exc
         from settfex.services.tfex.underlying_price import get_underlying_price
 
         logger.info("fetching TFEX underlying price for %s", symbol)
         try:
             stats = await get_underlying_price(symbol)
-        except httpx.HTTPStatusError as exc:
-            status_code = exc.response.status_code if exc.response is not None else None
+        except settfex_exc.FetchError as exc:
+            # settfex's OWN FetchError, never the same-named class in httpx: settfex does
+            # not use httpx at all, so the previous handler here was unreachable and
+            # status_code was always None (TK-0655). FetchError is the base that carries
+            # status_code, so this catches SeriesNotFoundError(404) and its siblings alike.
+            status_code = exc.status_code
             logger.warning(
-                "settfex underlying-price fetch for %s failed: HTTP %s", symbol, status_code
+                "settfex underlying-price fetch for %s failed: %s status_code=%s",
+                symbol,
+                type(exc).__name__,
+                status_code,
             )
             raise UnderlyingPriceFetchError(
                 f"settfex fetch failed for {symbol}", status_code=status_code
