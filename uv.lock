@@ -2116,7 +2116,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.3" },
     { name = "redis", specifier = ">=5" },
-    { name = "settfex", specifier = ">=0.3.0" },
+    { name = "settfex", specifier = "==0.27.0" },
     { name = "tvkit", specifier = ">=0.11.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
@@ -2218,16 +2218,16 @@ wheels = [
 
 [[package]]
 name = "settfex"
-version = "0.3.1"
+version = "0.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "curl-cffi" },
     { name = "loguru" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/82/0c/93f1e0bc0c42e7bbcce6f58b80c6ef2e2a7b9b46a16d1856f46c5c32e900/settfex-0.3.1.tar.gz", hash = "sha256:b18d0b16c2839ba4d7d5c244409fc40da08e6a8ef1ad91c5c17fac8cb00c7970", size = 514568, upload-time = "2026-11-02T09:44:43.553Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9e/c4/dd9d3ef65171a89d73a6e6a11d2c3a1a2c15ea354be76a8caa47b6610795/settfex-0.27.0.tar.gz", hash = "sha256:6a46ee660685366a7fafdd68567e10af07a96763bf1b3aff28204fc20a570909", size = 1412612, upload-time = "2026-11-04T09:41:18.496Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1a/1c/f76800691b0c34fcf243eb75a3625404fda1070d1b664d78ad5cad44a490/settfex-0.3.1-py3-none-any.whl", hash = "sha256:8d703c438286c252a3df12840d969313d6b97f603770585acfed5afe7f89b434", size = 82312, upload-time = "2026-11-02T09:44:42.041Z" },
+    { url = "https://files.pythonhosted.org/packages/78/99/bee49926c53939a1ab56c49bce05abf3b9f73261d35c0a1ce588cb252cd8/settfex-0.27.0-py3-none-any.whl", hash = "sha256:5a62b018cbbea3b0a38100f36320714c37a2176a64d36881cbfce9c78d3a7862", size = 309924, upload-time = "2026-11-04T09:41:16.744Z" },
 ]
 
 [[package]]

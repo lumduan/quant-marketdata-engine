@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
+from settfex import exceptions as settfex_exc
 from src.quant_marketdata_engine.underlying_price import service as service_mod
 from src.quant_marketdata_engine.underlying_price.errors import UnderlyingPriceFetchError
 from src.quant_marketdata_engine.underlying_price.models import UnderlyingPriceQuote
@@ -105,7 +106,33 @@ async def test_fetch_wraps_generic_exception(monkeypatch: pytest.MonkeyPatch) ->
     assert exc.value.status_code is None
 
 
-async def test_fetch_wraps_http_status_error_with_code(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fetch_carries_404_from_settfex_series_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # PRODUCTION-SHAPED (TK-0655). Verified live against settfex 0.27.0 on 2026-11-14:
+    # an unknown TFEX series raises SeriesNotFoundError with status_code=404, while a
+    # real series returns normally. This test FAILS if the handler is reverted to
+    # keying on httpx's exception, because settfex's error would then fall to the
+    # generic branch and status_code would be None again.
+    _patch_settfex(
+        monkeypatch,
+        raises=settfex_exc.SeriesNotFoundError("not found", status_code=404),
+    )
+    with pytest.raises(UnderlyingPriceFetchError) as exc:
+        await UnderlyingPriceService(None).fetch("ZZZZ99")
+    assert exc.value.status_code == 404
+
+
+async def test_fetch_gives_no_status_for_an_httpx_error_settfex_never_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """httpx is NOT on settfex's error path, and this pins that.
+
+    settfex uses curl-cffi and imports httpx nowhere, so an httpx exception can only
+    reach this service by mistake. It must fall to the generic branch (no status), not
+    be mapped to a 404. Kept as the counterpart to the test above: together they say
+    *settfex's* error carries the status and *httpx's* does not.
+    """
     request = httpx.Request("GET", "https://www.tfex.co.th/x")
     response = httpx.Response(404, request=request)
     _patch_settfex(
@@ -114,7 +141,7 @@ async def test_fetch_wraps_http_status_error_with_code(monkeypatch: pytest.Monke
     )
     with pytest.raises(UnderlyingPriceFetchError) as exc:
         await UnderlyingPriceService(None).fetch("NOPE")
-    assert exc.value.status_code == 404
+    assert exc.value.status_code is None
 
 
 # ---- get: read-through cache --------------------------------------------

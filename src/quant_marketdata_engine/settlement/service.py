@@ -10,6 +10,10 @@ and writes **degrade gracefully** — a Redis miss or error logs a warning and
 behaves as a miss, so a live fetch still serves when Redis is down. Every
 ``settfex`` failure is wrapped in :class:`SettlementFetchError`, carrying the
 upstream HTTP status when one is known so the API layer can map 404 vs 502/503.
+Measured against settfex 0.27.0 on 2026-11-14: an unknown series raises
+``settfex.exceptions.SeriesNotFoundError`` with ``status_code=404``, and a real
+series returns normally; ``tests/test_settlement_service.py`` drives that same
+exception type, so this sentence fails with the test if it stops being true.
 """
 
 from __future__ import annotations
@@ -19,7 +23,6 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-import httpx
 import redis.asyncio as aioredis
 
 from src.quant_marketdata_engine.cache.single_flight import single_flight
@@ -86,19 +89,31 @@ class SettlementService:
         """Fetch a fresh settlement quote from TFEX via ``settfex`` (no cache).
 
         Raises:
-            SettlementFetchError: on any ``settfex``/transport failure. An HTTP
-                status (e.g. 404 for an unknown series) is carried on the error.
+            SettlementFetchError: on any ``settfex``/transport failure.
+                ``status_code`` carries settfex's own ``FetchError.status_code``
+                (404 for an unknown series, verified live against 0.27.0), and is
+                ``None`` for a transport/parse failure that never reached HTTP.
         """
         # Import lazily so the heavy settfex import is paid only on a cold fetch
         # and the rest of the engine starts without it.
+        from settfex import exceptions as settfex_exc
         from settfex.services.tfex.trading_statistics import get_trading_statistics
 
         logger.info("fetching TFEX settlement for %s", symbol)
         try:
             stats = await get_trading_statistics(symbol)
-        except httpx.HTTPStatusError as exc:
-            status_code = exc.response.status_code if exc.response is not None else None
-            logger.warning("settfex settlement fetch for %s failed: HTTP %s", symbol, status_code)
+        except settfex_exc.FetchError as exc:
+            # settfex's OWN FetchError, never httpx's same-named class: settfex does not
+            # use httpx at all, so `except httpx.HTTPStatusError` here was unreachable and
+            # status_code was always None (TK-0655). FetchError is the base that carries
+            # status_code, so this catches SeriesNotFoundError(404) and its siblings alike.
+            status_code = exc.status_code
+            logger.warning(
+                "settfex settlement fetch for %s failed: %s status_code=%s",
+                symbol,
+                type(exc).__name__,
+                status_code,
+            )
             raise SettlementFetchError(
                 f"settfex fetch failed for {symbol}", status_code=status_code
             ) from exc
